@@ -67,27 +67,13 @@ def DoUpdate():
     #print("GPU0 Mem:   "+"{:.2%}".format(GPUmem))
 
 
-    workString = ""
-    filledNumber = 0
     #CPU graph
-    filledNumber = int(round(CPU/100*graphSize,0))
-    workString = repeatCharacter(filled,filledNumber)
-    workString += repeatCharacter(blank,graphSize-filledNumber)
-    print("CPU Load: "+workString)
-    filledNumber = int(round(RAM/100*graphSize,0))
-    workString = repeatCharacter(filled,filledNumber)
-    workString += repeatCharacter(blank,graphSize-filledNumber)
-    print("RAM Usage:"+workString)
+    print("CPU Load: "+GenerateGraph(CPU,graphSize,filled,blank))
+    print("RAM Usage:"+GenerateGraph(RAM,graphSize,filled,blank))
 
     #GPU Graph
-    filledNumber = int(round(GPULoad/100*graphSize,0))
-    workString = repeatCharacter(filled,filledNumber)
-    workString += repeatCharacter(blank,graphSize-filledNumber)
-    print("GPU Load: "+workString)
-    filledNumber = int(round(GPUmem/100*graphSize,0))
-    workString = repeatCharacter(filled,filledNumber)
-    workString += repeatCharacter(blank,graphSize-filledNumber)
-    print("GPU Mem:  "+workString)
+    print("GPU Load: "+GenerateGraph(GPULoad,graphSize,filled,blank))
+    print("GPU Mem:  "+GenerateGraph(GPUmem,graphSize,filled,blank))
 
     if ser.is_open:
         ExportString = str(delay) + "," + str(CPU) + "," + str(RAM) + "," + str(GPULoad) + "," + str(GPUmem)
@@ -96,6 +82,7 @@ def DoUpdate():
     else:
         print("Serial Unavailable.")
         #ser = OpenComPort(ser)
+        ser.open()
 
 def OpenComPort(ser):
     #open serial comms
@@ -123,7 +110,13 @@ def OpenComPort(ser):
     time.sleep(2.5)
     return ser
 
-
+def GenerateGraph(PercentFilled, size, filledChar, UnfilledChar):
+    workString = ""
+    filledNumber = 0
+    filledNumber = int(round(PercentFilled/100*size,0))
+    workString = repeatCharacter(filledChar,filledNumber)
+    workString += repeatCharacter(UnfilledChar,size-filledNumber)
+    return workString
 
 
 
