@@ -8,7 +8,8 @@ import io
 import math
 import random
 import re
-import timeit
+#import time
+#import timeit
 
 
 #global variables
@@ -64,13 +65,18 @@ def filter_wordlist(l_wordList, s_matchPattern, l_NotPresentChars=[]) -> list:
 
 def generate_FilterPermutations(s_Pattern, c_PermCharacter, i_startIndex = 0) -> list:
     i_BlankSpots = 0
+    i_AlreadyFilledSpots = 0
+    for i in range(0,len(s_Pattern)):
+        if s_Pattern[i] == c_PermCharacter:
+            i_AlreadyFilledSpots +=1
     for i in range(i_startIndex, len(s_Pattern)):
         if s_Pattern[i] == ".":
             i_BlankSpots += 1
+
     #i_BlankSpots = s_Pattern.count(".") #can't be used because we only care about results AFTER where we start
     l_Permutations = []
     l_Permutations.append(s_Pattern)
-    if i_BlankSpots < 1:
+    if i_BlankSpots < 1 or (i_AlreadyFilledSpots > len(s_Pattern)/4): #no more blank spots OR an unreasonable amount of one letter
         return l_Permutations
     l_BlankSpotIndices = []
     i_currIndex = i_startIndex
@@ -431,6 +437,31 @@ def getBestPlay(l_wordlist, s_CurrentLayout,c_CurrentGuess) -> str:
 
     return s_BestResultFilter
 
+def getBestPlay_inline(l_wordlist, s_CurrentLayout,c_CurrentGuess) -> str:
+    l_Perms = generate_FilterPermutations(s_CurrentLayout,c_CurrentGuess)
+    l_FilterResults = [0]*len(l_Perms)
+    s_NotCurrentGuessRegex = "[^"+c_CurrentGuess+"]"
+
+    l_wordsWithoutGuess = filter_wordlist(l_wordlist,"",[c_CurrentGuess])
+    l_RemainingWords = list(set(l_wordlist) - set(l_wordsWithoutGuess))
+    #l_RemainingWords = RemovedFromList(l_wordsWithoutGuess,l_wordlist) #get all the words with at least 1 of the letters in it
+    l_FilterResults[0] = len(l_wordsWithoutGuess)
+    i_length = len(l_Perms)
+    for i in range(1,i_length):
+        regex_matchPattern = re.compile(l_Perms[i].replace(".",s_NotCurrentGuessRegex))
+        l_filteredWordlist = list(filter(regex_matchPattern.match,l_RemainingWords)) #run the list against regex all at once
+        if len(l_filteredWordlist) != 0: #only run it if it's worth my time
+            l_RemainingWords = list(set(l_RemainingWords) - set(l_filteredWordlist))
+            #l_RemainingWords = RemovedFromList(l_filteredWordlist,l_RemainingWords) #I hope that by removing hits, the process will get faster and faster.
+        l_FilterResults[i] = len(l_filteredWordlist) #get the length of wordlists to inform our descision
+
+    #TODO: maybe add some randomness, but it seems like the best option is WAY ahead of others
+    #TODO: currently when down to the final results, the bot will sometimes give up the win. make sure that the best result has at least one blank at all costs.
+    i_BestResultindex = l_FilterResults.index(max(l_FilterResults))
+    s_BestResultFilter = l_Perms[i_BestResultindex]
+
+    return s_BestResultFilter
+
 
 
 #program
@@ -452,18 +483,22 @@ except: #they didn't enter a proper number
             break
 s_GivenInfo = "."*i_WordLen
 
-g=timeit.Timer(lambda: generate_FilterPermutations(s_GivenInfo,"a"))
-#print("generate filter: "+str(g.timeit(1)))
-
-a=timeit.Timer(lambda: filter_wordlist(l_WordList, "aaaaaaa[^a][^a][^a][^a][^a][^a][^a][^a]",["b"]))
-print("Apply filter: "+str(a.timeit(33000)))
-
-rfl=timeit.Timer(lambda: RemovedFromList(l_WordList,l_WordList))
-#print("Remove from list: "+str(rfl.timeit(100)))
-
-bp = timeit.Timer(lambda: getBestPlay(l_WordList, s_GivenInfo, "a"))
+#g=timeit.Timer(lambda: generate_FilterPermutations(s_GivenInfo,"a"))
+##print("generate filter: "+str(g.timeit(10)))
+#
+#a=timeit.Timer(lambda: filter_wordlist(l_WordList, "aaaaaaa[^a][^a][^a][^a][^a][^a][^a][^a]"))
+##print("Apply filter: "+str(a.timeit(33000)))
+#
+#rfl=timeit.Timer(lambda: RemovedFromList(l_WordList,l_WordList))
+##print("Remove from list: "+str(rfl.timeit(100)))
+#
+#bp = timeit.Timer(lambda: getBestPlay(l_WordList, s_GivenInfo, "a"))
 #print("Get Best play: "+str(bp.timeit(1)))
-quit()
+#
+#bpi = timeit.Timer(lambda: getBestPlay_inline(l_WordList, s_GivenInfo, "a"))
+#print("Get Best play inline: "+str(bpi.timeit(1)))
+#
+#quit()
 
 #display_hangman(s_GivenInfo, l_WrongGuesses, i_MaxErrorCount) #give them the number of letters before forcing them to guess. It's only polite.
 #main game loop
@@ -472,7 +507,7 @@ while(len(l_WrongGuesses) < i_MaxErrorCount ):
     c_GuessInput = input("Pick a letter: ").strip().lower()
     for c in c_GuessInput:
         if c not in l_WrongGuesses and c not in s_GivenInfo: #make sure I'm not counting previous errors or correct answers against them.
-            s_bestPlay = getBestPlay(l_WordList, s_GivenInfo, c)
+            s_bestPlay = getBestPlay_inline(l_WordList, s_GivenInfo, c)
             if s_bestPlay == s_GivenInfo: #the best play was to not let them have that letter
                 l_WrongGuesses.append(c)
             else:
