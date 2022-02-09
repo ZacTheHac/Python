@@ -21,6 +21,7 @@ l_WrongGuesses = []
 i_MaxErrorCount = 13
 
 def load_dict(file,StorageList):
+    """Opens the file at path file, and appends the list to StorageList"""
     fileDict=io.open(file, mode="r", encoding="utf-8")
     dictionary = fileDict.readlines()
     dictsize = int(len(dictionary))
@@ -43,6 +44,8 @@ def optimize_wordlist(wordList,wordLength,bannedCharacters) -> list:
     return newWords
 
 def filter_wordlist(l_wordList, s_matchPattern, l_NotPresentChars=[]) -> list:
+    """returns a wordlist in which all words match the regex s_matchPattern and contain no characters from l_NotPresentChars\n
+    the regex is modified so all \".\" are replaced with a search that excludes all other letters in the regex."""
     if s_matchPattern != "":
         knownCharacters = ""
         for char in s_matchPattern:
@@ -64,6 +67,8 @@ def filter_wordlist(l_wordList, s_matchPattern, l_NotPresentChars=[]) -> list:
         return l_wordList
 
 def generate_FilterPermutations(s_Pattern, c_PermCharacter, i_startIndex = 0) -> list:
+    """Using recusion, generates most of the combinations you can make from replacing \".\" with c_PermCharacter in s_Pattern\n
+    However, this will only allow up to length/4 replacement characters, as beyond that is considered an edge case"""
     i_BlankSpots = 0
     i_AlreadyFilledSpots = 0
     for i in range(0,len(s_Pattern)):
@@ -87,8 +92,6 @@ def generate_FilterPermutations(s_Pattern, c_PermCharacter, i_startIndex = 0) ->
     #indices of blank spots found
     for BlankNum in range(0,i_BlankSpots):
         s_NewPattern = str_Replace(s_Pattern, l_BlankSpotIndices[BlankNum], c_PermCharacter)
-        #s_NewPattern[l_BlankSpotIndices[BlankNum]] = c_PermCharacter #can't do this in python
-        #l_Permutations.append(s_NewPattern) #unneeded since the function spits back the input if there's nothing to do
         l_Permutations.extend(generate_FilterPermutations(s_NewPattern, c_PermCharacter, l_BlankSpotIndices[BlankNum]+1)) #append makes a list in a list, extend adds the items. Also: recursion is fun~
     l_Permutations = list(dict.fromkeys(l_Permutations)) #dedupe, just in case.
     #if i_startIndex == 0:
@@ -96,18 +99,15 @@ def generate_FilterPermutations(s_Pattern, c_PermCharacter, i_startIndex = 0) ->
     return l_Permutations
 
 def str_Replace(s_Original, i_index, c_Replacement) -> str:
+    """Returns a string with the character at i_index in s_Original replaced with c_Replacement"""
     return s_Original[:i_index]+c_Replacement+s_Original[i_index+1:]
 
 def RemovedFromList(l_filteredList, l_UnfilteredList) -> list:
-    #l_removedList = []
-    #for word in l_UnfilteredList:
-    #    if word not in l_filteredList:
-    #        l_removedList.append(word)
-    l_removedList = list(set(l_UnfilteredList) - set(l_filteredList)) #more than double the speed
-    return l_removedList
-
+    """Returns a list showing what l_filteredList is missing from l_UnfilteredList"""
+    return list(set(l_UnfilteredList) - set(l_filteredList)) #more than double the speed than doing it individually.
 
 def display_hangman(s_knownInfo,l_wrongGuesses, i_MaxAllowedErrors):
+    """Handles displaying all gameplay information, from the blanks to the gallows"""
     f_errorPercent = len(l_wrongGuesses)/i_MaxAllowedErrors
     drawGallows(f_errorPercent)
 
@@ -120,6 +120,7 @@ def display_hangman(s_knownInfo,l_wrongGuesses, i_MaxAllowedErrors):
         print("Wrong guesses: "+s_wrongGuesses)
 
 def drawGallows(f_PercentComplete):
+    """Prints ASCII art depending on the percentage passed in. 0% is empty, 100% is complete"""
     s_Gallows0 = ""
     s_Gallows1 = """ Original art by: Krzysztof Biolik
          ________________________
@@ -414,50 +415,44 @@ YOU ARE DEAD.
         print(s_Gallows8)
 
 def getBestPlay(l_wordlist, s_CurrentLayout,c_CurrentGuess) -> str:
-    l_Perms = generate_FilterPermutations(s_CurrentLayout,c_CurrentGuess)
-    l_FilterResults = [0]*len(l_Perms)
-    s_NotCurrentGuessRegex = "[^"+c_CurrentGuess+"]"
-
-    l_wordsWithoutGuess = filter_wordlist(l_wordlist,"",[c_CurrentGuess])
-    l_RemainingWords = RemovedFromList(l_wordsWithoutGuess,l_wordlist) #get all the words with at least 1 of the letters in it
-    l_FilterResults[0] = len(l_wordsWithoutGuess)
-    #l_RemainingWords = l_wordlist
-    for i in range(1,len(l_Perms)):
-        s_tempRegex = l_Perms[i].replace(".",s_NotCurrentGuessRegex)
-        l_filteredWordlist = filter_wordlist(l_RemainingWords, s_tempRegex)
-        if len(l_filteredWordlist) != 0: #only run it if it's worth my time
-            l_RemainingWords = RemovedFromList(l_filteredWordlist,l_RemainingWords) #I hope that by removing hits, the process will get faster and faster.
-        l_FilterResults[i] = len(l_filteredWordlist) #get the length of wordlists to inform our descision
-    
-
-    #TODO: maybe add some randomness, but it seems like the best option is WAY ahead of others
-    #TODO: currently when down to the final results, the bot will sometimes give up the win. make sure that the best result has at least one blank at all costs.
-    i_BestResultindex = l_FilterResults.index(max(l_FilterResults))
-    s_BestResultFilter = l_Perms[i_BestResultindex]
-
-    return s_BestResultFilter
-
-def getBestPlay_inline(l_wordlist, s_CurrentLayout,c_CurrentGuess) -> str:
+    """Returns the board layout that would most benefit the computer by giving the player the least amount of info possible."""
     l_Perms = generate_FilterPermutations(s_CurrentLayout,c_CurrentGuess)
     l_FilterResults = [0]*len(l_Perms)
     s_NotCurrentGuessRegex = "[^"+c_CurrentGuess+"]"
 
     l_wordsWithoutGuess = filter_wordlist(l_wordlist,"",[c_CurrentGuess])
     l_RemainingWords = list(set(l_wordlist) - set(l_wordsWithoutGuess))
-    #l_RemainingWords = RemovedFromList(l_wordsWithoutGuess,l_wordlist) #get all the words with at least 1 of the letters in it
     l_FilterResults[0] = len(l_wordsWithoutGuess)
     i_length = len(l_Perms)
     for i in range(1,i_length):
         regex_matchPattern = re.compile(l_Perms[i].replace(".",s_NotCurrentGuessRegex))
         l_filteredWordlist = list(filter(regex_matchPattern.match,l_RemainingWords)) #run the list against regex all at once
         if len(l_filteredWordlist) != 0: #only run it if it's worth my time
-            l_RemainingWords = list(set(l_RemainingWords) - set(l_filteredWordlist))
-            #l_RemainingWords = RemovedFromList(l_filteredWordlist,l_RemainingWords) #I hope that by removing hits, the process will get faster and faster.
+            l_RemainingWords = list(set(l_RemainingWords) - set(l_filteredWordlist)) #by removing hits, the process gets faster and faster.
         l_FilterResults[i] = len(l_filteredWordlist) #get the length of wordlists to inform our descision
 
-    #TODO: maybe add some randomness, but it seems like the best option is WAY ahead of others
-    #TODO: currently when down to the final results, the bot will sometimes give up the win. make sure that the best result has at least one blank at all costs.
-    i_BestResultindex = l_FilterResults.index(max(l_FilterResults))
+    #TODO: maybe add some randomness, but it seems like the best option is WAY ahead of others, so randomness may not add any useful gameplay.
+    #when down to the final results, the bot will sometimes give up the win. The following code makes sure the answer given is as unhelpful as possible.
+    i_BestResultScore = max(l_FilterResults)
+    l_BestResults = [i for i, j in enumerate(l_FilterResults) if j == i_BestResultScore]
+    if len(l_BestResults) > 1:
+        l_BlanksLeft = [0]*len(l_BestResults)
+        for i in range(len(l_BestResults)):
+            i_BlanksLeft = 0
+            for c in l_Perms[l_BestResults[i]]:
+                if c == ".":
+                    i_BlanksLeft +=1
+            l_BlanksLeft[i] = i_BlanksLeft
+        #all results had their blanks counted up. Want to pick the one with the most blanks. Don't give up if you don't have to!
+        i_MaxBlanks = max(l_BlanksLeft)
+        l_MaxBlanks = [i for i, j in enumerate(l_BlanksLeft) if j == i_MaxBlanks]
+        if len(l_MaxBlanks) > 1:#somehow there is STILL a tie
+            i_BestResultindex = l_BestResults[random.randrange(0,len(l_MaxBlanks))]
+        else:
+            i_BestResultindex = l_BestResults[l_MaxBlanks[0]]
+    else:
+        i_BestResultindex = l_FilterResults.index(i_BestResultScore)
+    
     s_BestResultFilter = l_Perms[i_BestResultindex]
 
     return s_BestResultFilter
@@ -483,31 +478,13 @@ except: #they didn't enter a proper number
             break
 s_GivenInfo = "."*i_WordLen
 
-#g=timeit.Timer(lambda: generate_FilterPermutations(s_GivenInfo,"a"))
-##print("generate filter: "+str(g.timeit(10)))
-#
-#a=timeit.Timer(lambda: filter_wordlist(l_WordList, "aaaaaaa[^a][^a][^a][^a][^a][^a][^a][^a]"))
-##print("Apply filter: "+str(a.timeit(33000)))
-#
-#rfl=timeit.Timer(lambda: RemovedFromList(l_WordList,l_WordList))
-##print("Remove from list: "+str(rfl.timeit(100)))
-#
-#bp = timeit.Timer(lambda: getBestPlay(l_WordList, s_GivenInfo, "a"))
-#print("Get Best play: "+str(bp.timeit(1)))
-#
-#bpi = timeit.Timer(lambda: getBestPlay_inline(l_WordList, s_GivenInfo, "a"))
-#print("Get Best play inline: "+str(bpi.timeit(1)))
-#
-#quit()
-
-#display_hangman(s_GivenInfo, l_WrongGuesses, i_MaxErrorCount) #give them the number of letters before forcing them to guess. It's only polite.
 #main game loop
 while(len(l_WrongGuesses) < i_MaxErrorCount ):
     display_hangman(s_GivenInfo, l_WrongGuesses, i_MaxErrorCount)
     c_GuessInput = input("Pick a letter: ").strip().lower()
     for c in c_GuessInput:
         if c not in l_WrongGuesses and c not in s_GivenInfo: #make sure I'm not counting previous errors or correct answers against them.
-            s_bestPlay = getBestPlay_inline(l_WordList, s_GivenInfo, c)
+            s_bestPlay = getBestPlay(l_WordList, s_GivenInfo, c)
             if s_bestPlay == s_GivenInfo: #the best play was to not let them have that letter
                 l_WrongGuesses.append(c)
             else:
