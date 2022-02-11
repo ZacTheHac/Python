@@ -66,23 +66,23 @@ def filter_wordlist(l_wordList, s_matchPattern, l_NotPresentChars=[]) -> list:
     else:
         return l_wordList
 
-def generate_FilterPermutations(s_Pattern, c_PermCharacter, i_startIndex = 0) -> list:
-    """Using recusion, generates most of the combinations you can make from replacing \".\" with c_PermCharacter in s_Pattern\n
+def generate_FilterCombinations(s_Pattern, c_ComboCharacter, i_startIndex = 0) -> list:
+    """Using recusion, generates most of the combinations you can make from replacing \".\" with c_ComboCharacter in s_Pattern\n
     However, this will only allow up to length/4 replacement characters, as beyond that is considered an edge case"""
     i_BlankSpots = 0
     i_AlreadyFilledSpots = 0
     for i in range(0,len(s_Pattern)):
-        if s_Pattern[i] == c_PermCharacter:
+        if s_Pattern[i] == c_ComboCharacter:
             i_AlreadyFilledSpots +=1
     for i in range(i_startIndex, len(s_Pattern)):
         if s_Pattern[i] == ".":
             i_BlankSpots += 1
 
     #i_BlankSpots = s_Pattern.count(".") #can't be used because we only care about results AFTER where we start
-    l_Permutations = []
-    l_Permutations.append(s_Pattern)
+    l_Combinations = []
+    l_Combinations.append(s_Pattern)
     if i_BlankSpots < 1 or (i_AlreadyFilledSpots > len(s_Pattern)/4): #no more blank spots OR an unreasonable amount of one letter
-        return l_Permutations
+        return l_Combinations
     l_BlankSpotIndices = []
     i_currIndex = i_startIndex
     for BlankNum in range(1,i_BlankSpots+1):
@@ -91,12 +91,12 @@ def generate_FilterPermutations(s_Pattern, c_PermCharacter, i_startIndex = 0) ->
         i_currIndex = i_foundIndex+1
     #indices of blank spots found
     for BlankNum in range(0,i_BlankSpots):
-        s_NewPattern = str_Replace(s_Pattern, l_BlankSpotIndices[BlankNum], c_PermCharacter)
-        l_Permutations.extend(generate_FilterPermutations(s_NewPattern, c_PermCharacter, l_BlankSpotIndices[BlankNum]+1)) #append makes a list in a list, extend adds the items. Also: recursion is fun~
-    l_Permutations = list(dict.fromkeys(l_Permutations)) #dedupe, just in case.
+        s_NewPattern = str_Replace(s_Pattern, l_BlankSpotIndices[BlankNum], c_ComboCharacter)
+        l_Combinations.extend(generate_FilterCombinations(s_NewPattern, c_ComboCharacter, l_BlankSpotIndices[BlankNum]+1)) #append makes a list in a list, extend adds the items. Also: recursion is fun~
+    l_Combinations = list(dict.fromkeys(l_Combinations)) #dedupe, just in case.
     #if i_startIndex == 0:
-    #    print(str(len(l_Permutations))+" combinations found.")
-    return l_Permutations
+    #    print(str(len(l_Combinations))+" combinations found.")
+    return l_Combinations
 
 def str_Replace(s_Original, i_index, c_Replacement) -> str:
     """Returns a string with the character at i_index in s_Original replaced with c_Replacement"""
@@ -416,16 +416,16 @@ YOU ARE DEAD.
 
 def getBestPlay(l_wordlist, s_CurrentLayout,c_CurrentGuess) -> str:
     """Returns the board layout that would most benefit the computer by giving the player the least amount of info possible."""
-    l_Perms = generate_FilterPermutations(s_CurrentLayout,c_CurrentGuess)
-    l_FilterResults = [0]*len(l_Perms)
+    l_Combos = generate_FilterCombinations(s_CurrentLayout,c_CurrentGuess)
+    l_FilterResults = [0]*len(l_Combos)
     s_NotCurrentGuessRegex = "[^"+c_CurrentGuess+"]"
 
     l_wordsWithoutGuess = filter_wordlist(l_wordlist,"",[c_CurrentGuess])
     l_RemainingWords = list(set(l_wordlist) - set(l_wordsWithoutGuess))
     l_FilterResults[0] = len(l_wordsWithoutGuess)
-    i_length = len(l_Perms)
+    i_length = len(l_Combos)
     for i in range(1,i_length):
-        regex_matchPattern = re.compile(l_Perms[i].replace(".",s_NotCurrentGuessRegex))
+        regex_matchPattern = re.compile(l_Combos[i].replace(".",s_NotCurrentGuessRegex))
         l_filteredWordlist = list(filter(regex_matchPattern.match,l_RemainingWords)) #run the list against regex all at once
         if len(l_filteredWordlist) != 0: #only run it if it's worth my time
             l_RemainingWords = list(set(l_RemainingWords) - set(l_filteredWordlist)) #by removing hits, the process gets faster and faster.
@@ -439,7 +439,7 @@ def getBestPlay(l_wordlist, s_CurrentLayout,c_CurrentGuess) -> str:
         l_BlanksLeft = [0]*len(l_BestResults)
         for i in range(len(l_BestResults)):
             i_BlanksLeft = 0
-            for c in l_Perms[l_BestResults[i]]:
+            for c in l_Combos[l_BestResults[i]]:
                 if c == ".":
                     i_BlanksLeft +=1
             l_BlanksLeft[i] = i_BlanksLeft
@@ -453,7 +453,7 @@ def getBestPlay(l_wordlist, s_CurrentLayout,c_CurrentGuess) -> str:
     else:
         i_BestResultindex = l_FilterResults.index(i_BestResultScore)
     
-    s_BestResultFilter = l_Perms[i_BestResultindex]
+    s_BestResultFilter = l_Combos[i_BestResultindex]
 
     return s_BestResultFilter
 
