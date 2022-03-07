@@ -36,7 +36,7 @@ def build_dictionary(wordLength,bannedCharacters):
     global legalWords
 
     #load unix words
-    load_dict("Wordlists/words.txt",legalWords)
+    #load_dict("Wordlists/words.txt",legalWords)
 
     #load scrabble dict
     #load_dict("Wordlists/Scrabble-Words-2019.txt",legalWords)
@@ -54,10 +54,13 @@ def build_dictionary(wordLength,bannedCharacters):
     #load_dict("Wordlists/MEGADICT.txt",legalWords)
 
     #load wordle answer list (sorted, so it can't be directly used for cheating)
-    #load_dict("Wordlists/wordle_answerlist.txt",legalWords)
+    load_dict("Wordlists/wordle_answerlist.txt",legalWords)
 
     #load wordle complete list (both accepted words and answers)
     #load_dict("Wordlists/wordle_complete.txt",legalWords)
+
+    #load reduced wordle answer list (contains only the words after wordle 260 (CLOTH))
+    #load_dict("Wordlists/wordle_reduced_answerlist.txt",legalWords)
 
     #print("Optimizing wordlist...")
     legalWords = optimize_wordlist(legalWords,wordLength,bannedCharacters)
@@ -196,60 +199,163 @@ def genStats(noisy = True) -> None:
         else:
             print("The least common letter is: "+str(minLetters[0])+" in only "+str(minCount)+" words.")
 
-def filterWordlist(hangmanRules) -> None:
+def filterWordlist(hangmanRules,WordleMode) -> None:
     global bannedChars
     global unknownPositions
     global knownPositions
     global legalWords
 
-    purgatory = True
-    while purgatory:
-        bannedLetters = ""
-        knownPositions = "" #need these assignments or a blank input will keep old values
-        neededLetters = "" #need this assignment or the sanity check later will crash if playing by hangman rules
+    if WordleMode:
+        s_WordAttempt = input("Enter the word you tried: ").lower()
+        s_WordOutcome = input("How did that go for you? (y=yellow, g=green, anything else = grey) ").lower()
+        #yellows added to unknowPositions, Greens added to filter, greys added to banned chars
+        #edge cases: guessed a double letter when only a single exists. make sure to not add it to banned. however, it also means the letter is not there.
+        if len(s_WordOutcome) < len(s_WordAttempt):
+            print("You're that lazy? Going to assume the rest are grey.")
+            s_WordOutcome = s_WordOutcome.ljust(len(s_WordAttempt),".")
+        s_FilterString = ""
+        l_GreenLetters = []
+        l_YellowLetters = []
+        l_GreyLetters = []
+        for i in range(len(s_WordAttempt)):
+            if s_WordOutcome[i] == "g":
+                #green letter: best outcome
+                l_GreenLetters.append(s_WordAttempt[i])
+                s_FilterString += s_WordAttempt[i]
+            elif s_WordOutcome[i] == "y":
+                #Yellow: not great, but it works
+                l_YellowLetters.append(s_WordAttempt[i])
+                s_FilterString += "[^"+s_WordAttempt[i]+"]"
+            else:
+                #grey. garbage. however, to help mitigate the edge cases, will filter from this position anyways.
+                l_GreyLetters.append(s_WordAttempt[i])
+                s_FilterString += "[^"+s_WordAttempt[i]+"]"
+        #check for double letters while filling out bannedChars
+        l_FoundAll = []
+        for i in range(len(l_GreyLetters)):
+            if l_GreyLetters[i] in l_GreenLetters:
+                print("Looks like there's no more \""+l_GreyLetters[i]+"\" in the word.")
+                l_FoundAll.append(l_GreyLetters[i])
+                l_GreyLetters[i] = ""
+            elif l_GreyLetters[i] in l_YellowLetters:
+                print("Looks like there's no more \""+l_GreyLetters[i]+"\" in the word.")
+                #We don't know where it goes, so fullban isn't possible, and we already added it to filter string. so just remove the entry
+                l_GreyLetters[i] = ""
+            else:
+                bannedChars.append(l_GreyLetters[i])
+        #for those we know that we have all positions, filter all other positions with that letter
+        if(len(l_FoundAll) != 0):
+            s_foundAll = ""
+            for char in l_FoundAll:
+                s_foundAll += char
+            i_strLen = len(s_FilterString)
+            i=0
+            while i < i_strLen:
+                indexOf = s_FilterString.find("[^",i)
+                if indexOf != -1:
+                    indexOf += 2 #to make sure it goes after the filter character
+                    s_FilterString = str_Insert(s_FilterString,indexOf,s_foundAll)
+                    #refresh the values
+                    i_strLen = len(s_FilterString)
+                    i = indexOf + len(l_FoundAll)
+                else:
+                    #no more in the word
+                    i=i_strLen
+        #additional filters done
 
-        bannedLetters = input("Enter a list of known non-ocurring letters: ")
-        if not hangmanRules:
-            print("Known necessary letters: "+str(unknownPositions))
-            neededLetters = input("Enter necessary letters: ") #unknown positions aren't a thing in hangman
-        
-        knownPositions = input("Enter known letter positions with \".\" for an unknown place:") #secretly it's just a regex
-        if hangmanRules:
-            #read and convert the regex if it's a simple one
-            specialRegexChars = ["\\","^","[","]","$","|","?","*","+","{","}",":","<",">","!","(",")"]
-            if not any(specialChar in specialRegexChars for specialChar in knownPositions):
-                #find all the letters and filter them with [^chars] + add them to unknown positions, just in case
-                knownCharacters = ""
-                for char in knownPositions:
-                    if (char != ".") & (char not in knownCharacters):
-                        knownCharacters += char
-                if knownCharacters != "": #if the string was empty/all unknown, don't bother with anything
-                    filterBlock = "[^"+knownCharacters.lower()+"]"
-                    knownPositions = knownPositions.replace(".",filterBlock)
-                    for char in knownCharacters:
-                        if char not in unknownPositions: #have to filter this or it causes a crash by making the known characters longer than the word!
-                            unknownPositions.append(char)
+        #make sure the green letters are in unknownPositions so they can pad double letters
+        for char in l_GreenLetters:
+            if char not in unknownPositions:
+                unknownPositions.append(char)
+            else:
+                i_neededCount = (l_YellowLetters.count(char) + l_GreenLetters.count(char)) - unknownPositions.count(char)
+                #if unknownPositions.count(char) < (l_YellowLetters.count(char) + l_GreenLetters.count(char)):
+                for i in range(i_neededCount):
+                    unknownPositions.append(char)
 
-        if bool(set(bannedLetters).isdisjoint(set(neededLetters))):
-            if bool(set(bannedLetters).isdisjoint(set(unknownPositions))):
-                purgatory = False
+        #Finally, put the yellow letters into unknownPositions, being careful to only double up on confirmed double letters
+        for char in l_YellowLetters:
+            if char not in unknownPositions:
+                unknownPositions.append(char)
+            else:
+                i_neededCount = max(((l_YellowLetters.count(char) + l_GreenLetters.count(char)) - unknownPositions.count(char)),0)
+                #if unknownPositions.count(char) < (l_YellowLetters.count(char) + l_GreenLetters.count(char)):
+                for i in range(i_neededCount):
+                    unknownPositions.append(char)
+        knownPositions = s_FilterString
+    else:
+        purgatory = True
+        while purgatory:
+            bannedLetters = ""
+            knownPositions = "" #need these assignments or a blank input will keep old values
+            neededLetters = "" #need this assignment or the sanity check later will crash if playing by hangman rules
+
+            bannedLetters = input("Enter a list of known non-ocurring letters: ")
+            if not hangmanRules:
+                print("Known necessary letters: "+str(unknownPositions))
+                neededLetters = input("Enter necessary letters: ") #unknown positions aren't a thing in hangman
+
+            knownPositions = input("Enter known letter positions with \".\" for an unknown place:") #secretly it's just a regex
+            if hangmanRules:
+                #read and convert the regex if it's a simple one
+                specialRegexChars = ["\\","^","[","]","$","|","?","*","+","{","}",":","<",">","!","(",")"]
+                if not any(specialChar in specialRegexChars for specialChar in knownPositions):
+                    #find all the letters and filter them with [^chars] + add them to unknown positions, just in case
+                    knownCharacters = ""
+                    for char in knownPositions:
+                        if (char != ".") & (char not in knownCharacters):
+                            knownCharacters += char
+                    if knownCharacters != "": #if the string was empty/all unknown, don't bother with anything
+                        filterBlock = "[^"+knownCharacters.lower()+"]"
+                        knownPositions = knownPositions.replace(".",filterBlock)
+                        for char in knownCharacters:
+                            if char not in unknownPositions: #have to filter this or it causes a crash by making the known characters longer than the word!
+                                unknownPositions.append(char)
+
+            if bool(set(bannedLetters).isdisjoint(set(neededLetters))):
+                if bool(set(bannedLetters).isdisjoint(set(unknownPositions))):
+                    purgatory = False
+                else:
+                    print("Check that input again, it looks impossible.")
             else:
                 print("Check that input again, it looks impossible.")
-        else:
-            print("Check that input again, it looks impossible.")
 
-    for char in bannedLetters:
-        bannedChars.append(char)
-    for char in neededLetters:
-        unknownPositions.append(char)
+        for char in bannedLetters:
+            bannedChars.append(char)
+        for char in neededLetters:
+            if char in unknownPositions:
+                if bool(input("Did you mean there are multiple \""+char+"\"s? ")):
+                    unknownPositions.append(char)
+            else:
+                unknownPositions.append(char)
+
 
     newLegalWords = []
     for word in legalWords:
         if not any(bannedCharacter in bannedChars for bannedCharacter in word): #no banned letters
-            if all(needLetter in word for needLetter in neededLetters): #contains the letters we need
+            if StrContainsAllLettersWithCount(word,unknownPositions): #all(needLetter in word for needLetter in neededLetters): #contains the letters we need
                 if re.search(knownPositions, word):
                     newLegalWords.append(word)
     legalWords = newLegalWords
+
+def str_Insert(s_Original, i_index, s_Insert) -> str:
+    """Returns a string with s_Insert placed at i_index"""
+    return s_Original[:i_index]+s_Insert+s_Original[i_index:]
+
+def StrContainsAllLettersWithCount(s_Word, l_Letters) -> bool:
+    #quick check to skip the hard part if I don't need to.
+    #Turns out this check is slower in most cases
+    #if not all(needLetter in s_word for needLetter in l_letters):
+    #    return False
+
+    for i in range(len(l_Letters)):
+        #neededCount = l_letters.count(l_letters[i])
+        #haveCount = s_word.count(l_letters[i])
+        if s_Word.count(l_Letters[i])<l_Letters.count(l_Letters[i]):
+            return False
+    
+    #if it got this far, it's a pass
+    return True
 
 def mostCommonLetters(maxLetters, filterMaxCounts = True, noisy = True) -> list:
     global unknownPositions
@@ -435,7 +541,7 @@ def suggestWord_Refactor(wordList, numberOfLetters, hangmanRules=False, hardMode
             print("I would suggest trying \""+str(mcLetters[0])+"\".")
         return [str(mcLetters[0])]
 
-    if not hardMode:
+    if (not hardMode) and (len(wordList)>3): #if there's only 2 words in the wordlist, it takes less guesses to just try them both. 3 is more or less the same.
         wordList = wholeWordList
     #TODO: if mostCommonLetters gets refactored to use an input wordlist, I have to be sure to give it the legalWords, but still search inside wholeWordList
 
@@ -648,16 +754,20 @@ except: #they didn't enter a proper number
     wordLen = 10 #for edge purposes/a generic length for word suggestion to give
     b_AnyWordLength = True 
 
-
-b_KnowAllPositions = bool(input("Hangman rules (All letter positions known)? "))
-if not b_KnowAllPositions: b_HardMode = bool(input("Is Hard Mode active? "))
+print("NOTE: for every yes/no question, blank responses are \"no\", and any response is considered \"yes\"")
+b_WordleMode = bool(input("Wordle mode: "))
+if not b_WordleMode: 
+    b_KnowAllPositions = bool(input("Hangman rules (All letter positions known)? "))
+else:
+    b_KnowAllPositions = False
+    b_HardMode = bool(input("Is Hard Mode active? "))
 build_dictionary(wordLen,bannedChars)
 if not b_HardMode: #only bother populating it if we're gonna use it
     WholeWordList += legalWords
     load_extra_wordlists(wordLen,bannedChars)
 
 
-if (not b_KnowAllPositions) and (not b_HardMode):
+if (not b_KnowAllPositions) and (not b_WordleMode):
     findLetters = input("If you just want to find a word matching some letters, enter them now: ")
     if findLetters != "":
         Letters = []
@@ -677,7 +787,7 @@ while len(legalWords) > 1:
         print("--END OF WORDS--")
     #suggestWord(wordLen, unknownPositions, b_KnowAllPositions)
     suggestWord_Refactor(legalWords, wordLen+1, b_KnowAllPositions, b_HardMode, WholeWordList, [], True, True) #to be most faithful to the first part of the function, I originally used "(1+wordLen-len(unknownPositions))" but wordLen+1 is actually the part used later in the function
-    filterWordlist(b_KnowAllPositions)
+    filterWordlist(b_KnowAllPositions, b_WordleMode)
 try:
     print("Your word is: "+legalWords[0])
 except IndexError:
