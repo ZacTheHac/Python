@@ -36,7 +36,7 @@ def build_dictionary(wordLength,bannedCharacters):
     global legalWords
 
     #load unix words
-    load_dict("Wordlists/words.txt",legalWords)
+    #load_dict("Wordlists/words.txt",legalWords)
 
     #load scrabble dict
     #load_dict("Wordlists/Scrabble-Words-2019.txt",legalWords)
@@ -51,7 +51,7 @@ def build_dictionary(wordLength,bannedCharacters):
     #load_dict("Wordlists/words_alpha.txt",legalWords)
 
     #load combined file that eliminated 7,506,911 duplicates (~7MB)
-    #load_dict("Wordlists/MEGADICT.txt",legalWords)
+    load_dict("Wordlists/MEGADICT.txt",legalWords)
 
     #load wordle answer list (sorted, so it can't be directly used for cheating)
     #load_dict("Wordlists/wordle_answerlist.txt",legalWords)
@@ -377,16 +377,18 @@ def mostCommonLetters(maxLetters, filterMaxCounts = True, noisy = True) -> list:
             del l_CombinedList[i]
         else:
             break #once we hit a non-zero value, we know there's no more zeros as the list is sorted.
-    if filterMaxCounts:
-        for i in range(len(l_CombinedList)):
-            if l_CombinedList[0][1] >= len(legalWords):
-                if l_CombinedList[0][0] not in unknownPositions:
-                    if noisy:
-                        print(l_CombinedList[0][0]+" was removed because it's in everything.")
-                    unknownPositions.append(l_CombinedList[0][0])
-                del l_CombinedList[0]
-            else:
-                break #all the top words are gonna be at the front of the list. if one is below that length, we know there are no more.
+
+    for i in range(len(l_CombinedList)):
+        if filterMaxCounts & (l_CombinedList[0][1] >= len(legalWords)):
+            if l_CombinedList[0][0] not in unknownPositions:
+                if noisy:
+                    print(l_CombinedList[0][0]+" was removed because it's in everything.")
+                unknownPositions.append(l_CombinedList[0][0])
+            del l_CombinedList[0]
+        elif l_CombinedList[0][0] in unknownPositions: #obviously we know those are there
+            del l_CombinedList[0]
+        else:
+            break #all the top words are gonna be at the front of the list. if one is below that length, we know there are no more.
     #at this point, all zero counts and max counts (assuming filterMaxCounts is set) are removed. The list is also sorted.
     #just need to trim it to final size
     if len(l_CombinedList)>maxLetters:
