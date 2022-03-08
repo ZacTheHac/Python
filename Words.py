@@ -36,7 +36,7 @@ def build_dictionary(wordLength,bannedCharacters):
     global legalWords
 
     #load unix words
-    #load_dict("Wordlists/words.txt",legalWords)
+    load_dict("Wordlists/words.txt",legalWords)
 
     #load scrabble dict
     #load_dict("Wordlists/Scrabble-Words-2019.txt",legalWords)
@@ -54,7 +54,7 @@ def build_dictionary(wordLength,bannedCharacters):
     #load_dict("Wordlists/MEGADICT.txt",legalWords)
 
     #load wordle answer list (sorted, so it can't be directly used for cheating)
-    load_dict("Wordlists/wordle_answerlist.txt",legalWords)
+    #load_dict("Wordlists/wordle_answerlist.txt",legalWords)
 
     #load wordle complete list (both accepted words and answers)
     #load_dict("Wordlists/wordle_complete.txt",legalWords)
@@ -234,11 +234,11 @@ def filterWordlist(hangmanRules,WordleMode) -> None:
         l_FoundAll = []
         for i in range(len(l_GreyLetters)):
             if l_GreyLetters[i] in l_GreenLetters:
-                print("Looks like there's no more \""+l_GreyLetters[i]+"\" in the word.")
+                print("Looks like there's no more \""+l_GreyLetters[i]+"\"s in the word.")
                 l_FoundAll.append(l_GreyLetters[i])
                 l_GreyLetters[i] = ""
             elif l_GreyLetters[i] in l_YellowLetters:
-                print("Looks like there's no more \""+l_GreyLetters[i]+"\" in the word.")
+                print("Looks like there's no more \""+l_GreyLetters[i]+"\"s in the word.")
                 #We don't know where it goes, so fullban isn't possible, and we already added it to filter string. so just remove the entry
                 l_GreyLetters[i] = ""
             else:
@@ -440,82 +440,67 @@ def medianLetters(maxLetters, noisy = True) -> list:
     noisy determines if the function prints out its findings to the console. True is to print, and is the default
     """
 
-    #TODO: this code can easily softlock. either build in protection against that, or rewrite it to be unable to softlock.
     global wordsContainingLetters
     global legalWords
+    
+    l_CombinedList = [[0 for x in range(2)] for y in range(26)]
+    for i in range(26):
+        l_CombinedList[i][0] = chr(i+97)
+        l_CombinedList[i][1] = wordsContainingLetters[i]
+        #to access: [i][0] is the letter, [i][1] is the count
 
-    medianLetters = [""]*maxLetters
-    medianLetterCounts = [0]*maxLetters
+    #sort the list via the counts, in reverse order because I like the largest values on the left
+    l_CombinedList = sorted(l_CombinedList, key=lambda x: x[1], reverse=True)
 
     #make a list of values that are all nonzero
-    nonzeroWCL = []
-    for i in range(len(wordsContainingLetters)):
-        if wordsContainingLetters[i]>0:
-            nonzeroWCL.append(wordsContainingLetters[i])
+    for i in range(len(l_CombinedList)-1,0,-1): #iterate backwards so the index doesn't change on me
+        if l_CombinedList[i][1] == 0:
+            del l_CombinedList[i]
+        else:
+            break #once we hit a non-zero value, we know there's no more zeros as the list is sorted.
 
+    #l_MedianLetters = [[0 for x in range(2)] for y in range(maxLetters)]
+    i_CutAmount = len(l_CombinedList) - maxLetters
+    if i_CutAmount > 0:
+        if i_CutAmount % 2 == 0: #even cuts
+            i_cut = math.floor(i_CutAmount/2)
+            for i in range(i_cut):
+                del l_CombinedList[0]
+            for i in range(i_cut):
+                del l_CombinedList[len(l_CombinedList)-1]
+            #ends chopped off
+        else: #odd cuts, take the majority from the bottom
+            i_cut = math.floor(i_CutAmount/2)
+            for i in range(i_cut+1):
+                del l_CombinedList[0]
+            for i in range(i_cut):
+                del l_CombinedList[len(l_CombinedList)-1]
+            #for i in range(len(l_CombinedList)-1,len(l_CombinedList)-i_cut-1,-1):#technically also works, but is really ugly to look at
+            #    del l_CombinedList[i]
 
-    midLetterCount = statistics.median_high(nonzeroWCL)
-    midLetter = chr(wordsContainingLetters.index(midLetterCount)+97)
-    medianLetterCounts[math.ceil(maxLetters/2)-1] = midLetterCount
-    medianLetters[math.ceil(maxLetters/2)-1] = midLetter
-
-    #find the next smaller counts
-    index = math.ceil(maxLetters/2)-2
-    letterCount = midLetterCount
-    while index >= 0:
-        for c in range(letterCount-1,0,-1):
-            try:
-                letter = wordsContainingLetters.index(c)
-                medianLetterCounts[index] = c
-                medianLetters[index] = chr(letter+97)
-
-                index -= 1
-                letterCount = c
-                break
-            except ValueError:
-                #do nothing of value
-                pass
-        if letterCount == 1:
-            break #it's possible there's not enough values left to fill
-
-    #find the next larger counts
-    index = math.ceil(maxLetters/2)
-    letterCount = midLetterCount
-    while index < maxLetters:
-        for c in range(letterCount+1,letterCount+10000): #highest known count was 7401 so we can stop it past there
-            try:
-                letter = wordsContainingLetters.index(c)
-                medianLetterCounts[index] = c
-                medianLetters[index] = chr(letter+97)
-
-                index += 1
-                letterCount = c
-                break
-            except ValueError:
-                #do nothing of value
-                pass
-        if c == letterCount+9999:
-            break #we ran out of things to search
 
     #filter out nonsense values if they exist
     filteredMedianLetters = []
-    filteredMedianLetterCounts = []
-    for i in range(maxLetters):
-        if (medianLetterCounts[i] > 0):
-            if((medianLetterCounts[i] < len(legalWords))):
-                filteredMedianLetterCounts.append(medianLetterCounts[i])
-                filteredMedianLetters.append(medianLetters[i])
-            elif medianLetters[i] not in unknownPositions:
-                print(medianLetters[i]+" was removed because it's in everything.")
+    for i in range(len(l_CombinedList)):
+        if((l_CombinedList[i][1] < len(legalWords))):
+            filteredMedianLetters.append(l_CombinedList[i][0])
+        #elif l_CombinedList[i][0] not in unknownPositions:
+            #print(l_CombinedList[i][0]+" was removed because it's in everything.")
 
-    if noisy:
-        print("middle "+str(len(filteredMedianLetters))+" letters:")
-        print(str(filteredMedianLetters))
-        print(str(filteredMedianLetterCounts))
+    if noisy & len(l_CombinedList)>0:
+        print("middle "+str(len(l_CombinedList))+" letters:")
+        i_width = len(str(l_CombinedList[0][1])) #the longest number is this many chars wide
+        str_Letters = "| "
+        str_Counts = "| "
+        for i in range(len(l_CombinedList)):
+            str_Counts += str(l_CombinedList[i][1]).center(i_width," ")+" | "
+            str_Letters += str(l_CombinedList[i][0]).center(i_width," ")+" | "
+        print(str_Letters)
+        print(str_Counts)
 
     return filteredMedianLetters
 
-def suggestWord_Refactor(wordList, numberOfLetters, hangmanRules=False, hardMode = True, wholeWordList = [], wantedLetters = [], noisy = True, returnList = False) -> list:
+def suggestWord(wordList, numberOfLetters, hangmanRules=False, hardMode = True, wholeWordList = [], wantedLetters = [], noisy = True, returnList = False) -> list:
     """Prints words from list wordList that contain the most number of letters returned by mostCommonLetters()\n\n
     wordList is a list of valid words to pick from\n
     numberOfLetters is how many letters to get from mostCommonLetters() to try to cram into the word\n
@@ -592,116 +577,10 @@ def suggestWord_Refactor(wordList, numberOfLetters, hangmanRules=False, hardMode
                 print("Try \""+wordList[rnd]+"\"?")
             return [wordList[rnd]]
 
-def suggestWord(maxLetters, knownLetters, hangmanRules=False) -> None:
-    """Prints words from global list \"legalWords\" that contain the most number of letters returned by mostCommonLetters()\n\n
-    maxLetters is an int assumidly indicating how many letters long the word should be, but can be modified to fit your needs\n
-    knownLetters is a list of letters you know to be in the word. Can be blank if you're not using that\n
-    hangmanRules will just print the most common letter in the wordlist\n
-    The function grabs maxLetters-len(knownLetters) letters from mostCommonLetters()\n
-    \n
-    This is very convoluted. Should be reworked to take the wordlist as an argument and a combined value for how many letters to look for.
-    """
-    global legalWords
-
-    unknownCount = maxLetters - len(knownLetters)
-    mcLetters = mostCommonLetters((unknownCount+1), not hangmanRules) #if making a bot, set this to false as it can be very useful, it's also super useful when the positions of letters can really give a lot of info
-    midLetters = medianLetters((unknownCount+1))
-    lcLetters = leastCommonLetters((unknownCount+1))
-
-    if(hangmanRules):
-        print("I would suggest trying \""+str(mcLetters[0])+"\".")
-        return
-
-    if unknownCount < 1:
-        rnd = random.randrange(0,len(legalWords),1)
-        print("I've got no guidance. Try \""+legalWords[rnd]+"\"?")
-    else:
-        countMostCommonHit = [0]*len(legalWords)
-        mcUnknownLetters = mostCommonLetters(maxLetters+1, True, False)
-        for i in range(len(legalWords)):
-            #for every legal word, we're gonna count the amount of mc, mid, and lc letters
-            #eh, just the most common for now
-            #countMostCommonHit[i] = len(set(mcUnknownLetters) & set(legalWords[i])) #turns out this unfairly weights words that have duplicate letters. I don't want that. I want UNIQUE letters to filter by!
-            lettersInWord = []
-            for char in legalWords[i]:
-                if char not in lettersInWord:
-                    lettersInWord.append(char)
-            countMostCommonHit[i] = len(set(mcUnknownLetters) & set(lettersInWord)) #this takes a little longer, but should stop reccomendations of vastly different value being suggested.
-        #find the remaining word with the most most-common letters and suggest that
-        maxMCHit = max(countMostCommonHit)
-        maxHitWords = [i for i, j in enumerate(countMostCommonHit) if j == maxMCHit] #this is a list of indexes in legalWords where the max hit words reside
-        if len(maxHitWords) > 1:
-            print("A few suggestions:")
-            for i in range(min(len(maxHitWords),20)):
-                print(legalWords[maxHitWords[i]])
-            if(len(maxHitWords) > 20):
-                startIndex = 20
-            else:
-                startIndex = 0
-            rnd = random.randrange(startIndex,len(maxHitWords),1)
-            print("Might I suggest trying \""+legalWords[maxHitWords[rnd]]+"\"?")
-        elif len(maxHitWords) == 1:
-            print("Might I suggest trying \""+legalWords[maxHitWords[0]]+"\"?")
-        else:
-            print("Something severely broke when trying to suggest a word.") #the list shouldn't ever be empty. Only thing I can think of is if all letters are known, so mcLetters is empty, so all counts are 0
-            #so I'll use the ol standby:
-            rnd = random.randrange(0,len(legalWords),1)
-            print("Try \""+legalWords[rnd]+"\"?")
-        
-
-#let it run to the old suggester, too.
-#sometimes the fancy stuff doesn't make words the thing will accept
-
-    try:
-        lettersToSearchFor = []
-        #find up to 3 of the most common letters
-        rnd = random.randint(1,3)
-        for i in range(rnd):
-            rndlet = random.randrange(0,len(mcLetters),1)
-            lettersToSearchFor.append(mcLetters[rndlet])
-
-        #find up to 2 mid-range values
-        rnd = random.randint(0,2)
-        for i in range(rnd):
-            rndlet = random.randrange(0,len(midLetters),1)
-            lettersToSearchFor.append(midLetters[rndlet])
-
-        #maybe even throw in a low-value letter
-        rnd = random.randint(0,1)
-        for i in range(rnd):
-            rndlet = random.randrange(0,len(lcLetters),1)
-            lettersToSearchFor.append(lcLetters[rndlet])
-
-        #dedupe the list (important in late game)
-        lettersToSearchFor = list(dict.fromkeys(lettersToSearchFor)) #just mash it into keys. keys can't be duped, so they're eliminated.
-
-        #try to find a word that includes all these letters
-        purgatory = True
-        while purgatory:
-            suggestableWordlist = []
-            for word in legalWords:
-                if all(needLetter in word for needLetter in lettersToSearchFor): #contains the letters we want
-                    suggestableWordlist.append(word)
-            if len(suggestableWordlist) != 0:
-                rnd = random.randrange(0,len(suggestableWordlist),1)
-                print("Might I suggest trying \""+suggestableWordlist[rnd]+"\"?")
-                purgatory = False
-            else:
-                #print("Failed to find a word to suggest. Retrying.")
-                #crude weighted random. 50% of the time it tries to remove the last element since it's probably the one breaking it.
-                rnd = random.randrange(0,(len(lettersToSearchFor)*2),1)
-                rnd = min(rnd,(len(lettersToSearchFor)-1)) #clip the value to a possible element
-                #print("Removing "+str(lettersToSearchFor[rnd])+".")
-                lettersToSearchFor[rnd] = "" #remove that element
-    except ValueError: #very rare case: end up with a list of words that are all made of the same letters but no direction as to how they're arranged, the rands can't give back on a 0,0, so they error.
-        #print("I cannot make a suggestion at this time.")
-        rnd = random.randrange(0,len(legalWords),1)
-        print("I dunno, man? Try \""+legalWords[rnd]+"\"?")
-
 def FindWordWithLetters_refactor(wantedLetters, wordList):
     """Prints words from list wordList with the most number of letters from list wantedLetters.\n
     this was more a proof of concept that the new suggestWord can function much the same. but not exactly. it misses the finer points"""
-    foundWords = suggestWord_Refactor(wordList, 0, False, False, [], wantedLetters, True, True)
+    foundWords = suggestWord(wordList, 0, False, False, [], wantedLetters, True, True)
     if len(foundWords) == 1:
         print("The only/best word I can find is \""+foundWords[0]+"\".")
     elif len(foundWords) > 1:
@@ -755,6 +634,7 @@ except: #they didn't enter a proper number
     b_AnyWordLength = True 
 
 print("NOTE: for every yes/no question, blank responses are \"no\", and any response is considered \"yes\"")
+b_HardMode = False #assume this until proven otherwise. Helps with things like finding words with arbitrary letters.
 b_WordleMode = bool(input("Wordle mode: "))
 if not b_WordleMode: 
     b_KnowAllPositions = bool(input("Hangman rules (All letter positions known)? "))
@@ -773,7 +653,7 @@ if (not b_KnowAllPositions) and (not b_WordleMode):
         Letters = []
         for char in findLetters:
             Letters.append(char)
-        FindWordWithLetters(Letters,legalWords)
+        FindWordWithLetters(Letters,WholeWordList)
         quit() #why I can't just return when not in a function is beyond me...
 
 while len(legalWords) > 1:
@@ -786,7 +666,7 @@ while len(legalWords) > 1:
             print(word)
         print("--END OF WORDS--")
     #suggestWord(wordLen, unknownPositions, b_KnowAllPositions)
-    suggestWord_Refactor(legalWords, wordLen+1, b_KnowAllPositions, b_HardMode, WholeWordList, [], True, True) #to be most faithful to the first part of the function, I originally used "(1+wordLen-len(unknownPositions))" but wordLen+1 is actually the part used later in the function
+    suggestWord(legalWords, wordLen+1, b_KnowAllPositions, b_HardMode, WholeWordList, [], True, True) #to be most faithful to the first part of the function, I originally used "(1+wordLen-len(unknownPositions))" but wordLen+1 is actually the part used later in the function
     filterWordlist(b_KnowAllPositions, b_WordleMode)
 try:
     print("Your word is: "+legalWords[0])
