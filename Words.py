@@ -362,74 +362,51 @@ def mostCommonLetters(maxLetters, filterMaxCounts = True, noisy = True) -> list:
     global wordsContainingLetters
     global legalWords
 
-    topLetters = [""]*maxLetters
-    topLetterCounts = [0]*maxLetters #i could do this as a 2D array, but I don't wanna!
+    l_CombinedList = [[0 for x in range(2)] for y in range(26)]
+    for i in range(26):
+        l_CombinedList[i][0] = chr(i+97)
+        l_CombinedList[i][1] = wordsContainingLetters[i]
+        #to access: [i][0] is the letter, [i][1] is the count
 
-    for i in range(len(wordsContainingLetters)):
-        minValue = min(topLetterCounts)
-        minValueIndex = topLetterCounts.index(minValue)
-        if(wordsContainingLetters[i]>minValue)& ((wordsContainingLetters[i] < len(legalWords)) or not filterMaxCounts): #make sure the new value is larger than the minimum, but isn't in EVERY word. That's just not fun.
-            char = chr(i+97)
-            if (char not in unknownPositions) & (char not in topLetters):
-                topLetters[minValueIndex] = char
-                topLetterCounts[minValueIndex] = wordsContainingLetters[i]
-    
-    #now sort them
+    #sort the list via the counts, in reverse order because I like the largest values on the left
+    l_CombinedList = sorted(l_CombinedList, key=lambda x: x[1], reverse=True)
+
+    #make a list of values that are all nonzero
+    for i in range(len(l_CombinedList)-1,-1,-1): #iterate backwards so the index doesn't change on me
+        if l_CombinedList[i][1] == 0:
+            del l_CombinedList[i]
+        else:
+            break #once we hit a non-zero value, we know there's no more zeros as the list is sorted.
+    if filterMaxCounts:
+        for i in range(len(l_CombinedList)):
+            if l_CombinedList[0][1] >= len(legalWords):
+                if l_CombinedList[0][0] not in unknownPositions:
+                    if noisy:
+                        print(l_CombinedList[0][0]+" was removed because it's in everything.")
+                    unknownPositions.append(l_CombinedList[0][0])
+                del l_CombinedList[0]
+            else:
+                break #all the top words are gonna be at the front of the list. if one is below that length, we know there are no more.
+    #at this point, all zero counts and max counts (assuming filterMaxCounts is set) are removed. The list is also sorted.
+    #just need to trim it to final size
+    if len(l_CombinedList)>maxLetters:
+        l_CombinedList = l_CombinedList[0:maxLetters]
+
+    if noisy & (len(l_CombinedList)>0):
+        print("Top "+str(len(l_CombinedList))+" unknown letters:")
+        i_width = len(str(l_CombinedList[0][1])) #the longest number is this many chars wide
+        str_Letters = "| "
+        str_Counts = "| "
+        for i in range(len(l_CombinedList)):
+            str_Counts += str(l_CombinedList[i][1]).center(i_width," ")+" | "
+            str_Letters += str(l_CombinedList[i][0]).center(i_width," ")+" | "
+        print(str_Letters)
+        print(str_Counts)
+
     sortedTopLetters = []
-    for i in range(maxLetters):
-        topLetterIndex = topLetterCounts.index(max(topLetterCounts))
-        if(topLetterCounts[topLetterIndex] > 0): #if it's a zero count, it won by default, ignore it.
-            sortedTopLetters.append(topLetters[topLetterIndex])
-            topLetterCounts[topLetterIndex] = 0 #zero out the counter so it can't be used again
-
-    if noisy:
-        print("Top "+str(len(sortedTopLetters))+" unknown letters:")
-        print(str(sortedTopLetters))
-        #repair the top letter counts
-        for i in range(len(sortedTopLetters)):
-            ind = string.ascii_letters.index(sortedTopLetters[i])
-            topLetterCounts[i] = wordsContainingLetters[ind]
-        print(str(topLetterCounts[0:len(sortedTopLetters)]))
+    for i in range(len(l_CombinedList)):
+        sortedTopLetters.append(l_CombinedList[i][0])
     return sortedTopLetters
-
-def leastCommonLetters(maxLetters, noisy = True) -> list:
-    global bannedChars
-    global wordsContainingLetters
-
-    maxNumber = 999999
-    lowLetters = [""]*maxLetters
-    lowLetterCounts = [maxNumber]*maxLetters #i could do this as a 2D array, but I don't wanna!
-
-    for i in range(len(wordsContainingLetters)):
-        maxValue = max(lowLetterCounts)
-        maxValueIndex = lowLetterCounts.index(maxValue)
-        if(wordsContainingLetters[i]<maxValue) & (wordsContainingLetters[i] > 0):
-            char = chr(i+97)
-            
-            if (char not in bannedChars) & (char not in lowLetters):
-                if (wordsContainingLetters[i] < len(legalWords)):
-                    lowLetters[maxValueIndex] = char
-                    lowLetterCounts[maxValueIndex] = wordsContainingLetters[i]
-                elif char not in unknownPositions: #i found out I had to add this because occasionally it would tell me this for letters I KNEW were in everything
-                    print(char+" was removed because it's in everything.")
-
-    #now sort them
-    sortedBottomLetters = []
-    for i in range(maxLetters):
-        bottomLetterIndex = lowLetterCounts.index(min(lowLetterCounts))
-        if(lowLetterCounts[bottomLetterIndex] < maxNumber): #if it's a max count, it won by default, ignore it.
-            sortedBottomLetters.append(lowLetters[bottomLetterIndex])
-            lowLetterCounts[bottomLetterIndex] = maxNumber #max out the counter so it can't be used again
-
-    if noisy:
-        print("Lowest "+str(len(sortedBottomLetters))+" unbanned letters:")
-        print(str(sortedBottomLetters))
-        #repair the top letter counts
-        for i in range(len(sortedBottomLetters)):
-            ind = string.ascii_letters.index(sortedBottomLetters[i])
-            lowLetterCounts[i] = wordsContainingLetters[ind]
-        print(str(lowLetterCounts[0:len(sortedBottomLetters)]))
-    return sortedBottomLetters
 
 def medianLetters(maxLetters, noisy = True) -> list:
     """Returns a list of the letter that occurs the high median in the global \"legalWords\" based on values found in the global \"wordsContainingLetters\"\n
@@ -453,7 +430,7 @@ def medianLetters(maxLetters, noisy = True) -> list:
     l_CombinedList = sorted(l_CombinedList, key=lambda x: x[1], reverse=True)
 
     #make a list of values that are all nonzero
-    for i in range(len(l_CombinedList)-1,0,-1): #iterate backwards so the index doesn't change on me
+    for i in range(len(l_CombinedList)-1,-1,-1): #iterate backwards so the index doesn't change on me
         if l_CombinedList[i][1] == 0:
             del l_CombinedList[i]
         else:
@@ -484,10 +461,8 @@ def medianLetters(maxLetters, noisy = True) -> list:
     for i in range(len(l_CombinedList)):
         if((l_CombinedList[i][1] < len(legalWords))):
             filteredMedianLetters.append(l_CombinedList[i][0])
-        #elif l_CombinedList[i][0] not in unknownPositions:
-            #print(l_CombinedList[i][0]+" was removed because it's in everything.")
 
-    if noisy & len(l_CombinedList)>0:
+    if noisy & (len(l_CombinedList)>0):
         print("middle "+str(len(l_CombinedList))+" letters:")
         i_width = len(str(l_CombinedList[0][1])) #the longest number is this many chars wide
         str_Letters = "| "
@@ -499,6 +474,89 @@ def medianLetters(maxLetters, noisy = True) -> list:
         print(str_Counts)
 
     return filteredMedianLetters
+
+def leastCommonLetters(maxLetters, noisy = True) -> list:
+    global bannedChars
+    global wordsContainingLetters
+
+    l_CombinedList = [[0 for x in range(2)] for y in range(26)]
+    for i in range(26):
+        l_CombinedList[i][0] = chr(i+97)
+        l_CombinedList[i][1] = wordsContainingLetters[i]
+        #to access: [i][0] is the letter, [i][1] is the count
+
+    #sort the list via the counts, in reverse order because I like the largest values on the left
+    l_CombinedList = sorted(l_CombinedList, key=lambda x: x[1], reverse=True)
+
+    #make a list of values that are all nonzero
+    for i in range(len(l_CombinedList)-1,-1,-1): #iterate backwards so the index doesn't change on me
+        if l_CombinedList[i][1] == 0:
+            del l_CombinedList[i]
+        else:
+            break #once we hit a non-zero value, we know there's no more zeros as the list is sorted.
+    for i in range(len(l_CombinedList)):
+        if l_CombinedList[0][1] >= len(legalWords):
+            del l_CombinedList[0]
+        else:
+            break #all the top words are gonna be at the front of the list. if one is below that length, we know there are no more.
+    #at this point, all zero & max counts are removed. The list is also sorted.
+    #just need to trim it to final size
+    if len(l_CombinedList)>maxLetters:
+        l_CombinedList = l_CombinedList[len(l_CombinedList)-maxLetters:]
+
+    if noisy & (len(l_CombinedList)>0):
+        print("Rarest "+str(len(l_CombinedList))+" occuring letters:")
+        i_width = len(str(l_CombinedList[0][1])) #the longest number is this many chars wide
+        str_Letters = "| "
+        str_Counts = "| "
+        for i in range(len(l_CombinedList)):
+            str_Counts += str(l_CombinedList[i][1]).center(i_width," ")+" | "
+            str_Letters += str(l_CombinedList[i][0]).center(i_width," ")+" | "
+        print(str_Letters)
+        print(str_Counts)
+
+    sortedLowestLetters = []
+    for i in range(len(l_CombinedList)):
+        sortedLowestLetters.append(l_CombinedList[i][0])
+    return sortedLowestLetters
+
+def printAllLetters(filterMaxCounts = False) -> None:
+    global wordsContainingLetters
+    global legalWords
+
+    l_CombinedList = [[0 for x in range(2)] for y in range(26)]
+    for i in range(26):
+        l_CombinedList[i][0] = chr(i+97)
+        l_CombinedList[i][1] = wordsContainingLetters[i]
+        #to access: [i][0] is the letter, [i][1] is the count
+
+    #sort the list via the counts, in reverse order because I like the largest values on the left
+    l_CombinedList = sorted(l_CombinedList, key=lambda x: x[1], reverse=True)
+
+    #make a list of values that are all nonzero
+    for i in range(len(l_CombinedList)-1,-1,-1): #iterate backwards so the index doesn't change on me
+        if l_CombinedList[i][1] == 0:
+            del l_CombinedList[i]
+        else:
+            break #once we hit a non-zero value, we know there's no more zeros as the list is sorted.
+    if filterMaxCounts:
+        for i in range(len(l_CombinedList)):
+            if l_CombinedList[0][1] >= len(legalWords):
+                del l_CombinedList[0]
+            else:
+                break #all the top words are gonna be at the front of the list. if one is below that length, we know there are no more.
+    #at this point, all zero counts and max counts (assuming filterMaxCounts is set) are removed. The list is also sorted.
+
+    if len(l_CombinedList)>0:
+        print("Letter frequency in remaining words:")
+        i_width = len(str(l_CombinedList[0][1])) #the longest number is this many chars wide
+        str_Letters = "| "
+        str_Counts = "| "
+        for i in range(len(l_CombinedList)):
+            str_Counts += str(l_CombinedList[i][1]).center(i_width," ")+" | "
+            str_Letters += str(l_CombinedList[i][0]).center(i_width," ")+" | "
+        print(str_Letters)
+        print(str_Counts)
 
 def suggestWord(wordList, numberOfLetters, hangmanRules=False, hardMode = True, wholeWordList = [], wantedLetters = [], noisy = True, returnList = False) -> list:
     """Prints words from list wordList that contain the most number of letters returned by mostCommonLetters()\n\n
@@ -516,8 +574,9 @@ def suggestWord(wordList, numberOfLetters, hangmanRules=False, hardMode = True, 
         mcLetters = mostCommonLetters(numberOfLetters, not hangmanRules, noisy) #if making a bot, set this to false as it can be very useful, it's also super useful when the positions of letters can really give a lot of info
         #TODO: mcLetters always grabs from the global legalWords. may want to refactor it to use an input wordlist. until then, there's NO reason to pass the legalwordlist and the whole wordlist in the same go for hardmode.
         if noisy:
-            midLetters = medianLetters(numberOfLetters, noisy)
-            lcLetters = leastCommonLetters(numberOfLetters, noisy)
+            printAllLetters(not hangmanRules)
+            #midLetters = medianLetters(numberOfLetters, noisy)
+            #lcLetters = leastCommonLetters(numberOfLetters, noisy)
     else:
         mcLetters = wantedLetters #this just makes it easier for the code to work
 
