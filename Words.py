@@ -19,6 +19,8 @@ unknownPositions = []
 knownPositions = ""
 b_HardMode = True
 WholeWordList = [] #holds all the words we know. If hardmode isn't active, we can get more info trying words from this list
+b_SuperSearch = False
+b_SuperSearchConfirmed = True
 
 #functions block
 def load_dict(file,StorageList):
@@ -51,10 +53,10 @@ def build_dictionary(wordLength,bannedCharacters):
     #load_dict("Wordlists/words_alpha.txt",legalWords)
 
     #load combined file that eliminated 7,506,911 duplicates (~7MB)
-    load_dict("Wordlists/MEGADICT.txt",legalWords)
+    #load_dict("Wordlists/MEGADICT.txt",legalWords)
 
     #load wordle answer list (sorted, so it can't be directly used for cheating)
-    #load_dict("Wordlists/wordle_answerlist.txt",legalWords)
+    load_dict("Wordlists/wordle_answerlist.txt",legalWords)
 
     #load wordle complete list (both accepted words and answers)
     #load_dict("Wordlists/wordle_complete.txt",legalWords)
@@ -389,6 +391,7 @@ def mostCommonLetters(maxLetters, filterMaxCounts = True, noisy = True) -> list:
             del l_CombinedList[0]
         else:
             break #all the top words are gonna be at the front of the list. if one is below that length, we know there are no more.
+        #technically, there could be more known letters after the check fails once, but realistically, if we're not filtering, we probably just want the top unknown result.
     #at this point, all zero counts and max counts (assuming filterMaxCounts is set) are removed. The list is also sorted.
     #just need to trim it to final size
     if len(l_CombinedList)>maxLetters:
@@ -638,6 +641,133 @@ def suggestWord(wordList, numberOfLetters, hangmanRules=False, hardMode = True, 
                 print("Try \""+wordList[rnd]+"\"?")
             return [wordList[rnd]]
 
+def GetWordleResponse(s_Input, s_Answer) -> str:
+    """Returns a list of ".","G", and "Y" for absent, Green, and Yellow, respectively, to simulate what wordle would respond with"""
+    s_Correct = "G"
+    s_Present = "Y"
+    s_Absent = "."
+    #find greens
+    #find yellows from remaining letters, left to right. make sure letters aren't double-counted. Possibly destroy the letter in Answer when counted to make it easy?
+    #probably just process left to right, but I wonder if I can pull the code from wordle itself to see how it actually does it
+    #Code from wordle is as follows:
+    """var r = function(s_Guess, Solution) {
+        for (var a_Evaluation = Array(Solution.length).fill(s_LetterAbsent), a_IsNotCorrect = Array(Solution.length).fill(!0), a_IsNotFoundWrongPosition = Array(Solution.length).fill(!0), n = 0; n < s_Guess.length; n++) //fill eval aray with Absent, t/o with trues
+            s_Guess[n] === Solution[n] && a_IsNotFoundWrongPosition[n] && (a_Evaluation[n] = s_LetterCorrect,
+            a_IsNotCorrect[n] = !1,
+            a_IsNotFoundWrongPosition[n] = !1); //if the letter is correct & a_IsNotFoundWrongPosition is true, set the eval as correct, set IsNotCorrect and a_IsNotFoundWrongPosition to false
+        for (var r = 0; r < s_Guess.length; r++) {
+            var LetterToLookFor = s_Guess[r];
+            if (a_IsNotCorrect[r])
+                for (var l = 0; l < Solution.length; l++) {
+                    var LetterFromSolution = Solution[l];
+                    if (a_IsNotFoundWrongPosition[l] && LetterToLookFor === LetterFromSolution) { //if that letter isn't already marked as present and matches
+                        a_Evaluation[r] = s_LetterPresent,
+                        a_IsNotFoundWrongPosition[l] = !1;
+                        break
+                    } //mark the eval of the guess as Present, and set a_IsNotFoundWrongPosition to false. Immediately break.
+                }
+        }
+        return a_Evaluation
+    }"""
+    l_Evaluation = [s_Absent]*len(s_Answer)
+    l_IsCorrect = [False]*len(s_Answer)
+    l_IsSearchable = [True]*len(s_Answer)
+    for i in range(len(s_Answer)):
+        if (s_Input[i] == s_Answer[i]) and (l_IsSearchable[i]):
+            l_Evaluation[i] = s_Correct
+            l_IsCorrect[i] = True
+            l_IsSearchable[i] = False
+    #greens found and marked
+    for i in range(len(s_Answer)):
+        if not l_IsCorrect[i]:
+            Letter = s_Input[i]
+            for j in range(len(s_Answer)):
+                SolutionLetter = s_Answer[j]
+                if l_IsSearchable[j] and (Letter == SolutionLetter):
+                    l_Evaluation[i] = s_Present
+                    l_IsSearchable[j] = False
+                    break
+    #yellows found and marked
+    #create string
+    s_Output = ""
+    for i in range(len(l_Evaluation)):
+        s_Output += l_Evaluation[i]
+    return s_Output
+
+def FindOptimalPlay(l_WordList, b_HardMode = True, l_WholeWordList = []) -> list:
+    """A rather expensive function. runs in ~ O(n*m) time, depending on the length of the lists put in.
+    BUT: should give the best possible wordle play, or pretty close to it!
+    l_WordList is a list of all the answers
+    b_HardMode tells the function if hardmode is active
+    l_WholeWordList lists all playable words, is only used if b_HardMode is True"""
+    #Find all the words in WholeWordList that could help (have unknown letters and/or unknown positions in a position to test), or use WordList if hardmode is on
+    #of that list, find the word that gives the best outcome on average, no matter the response
+        #find all possible responses (grey, yellows, greens) given the wordlist
+        #calculate a score for each one: given that result, how many words are left?
+        #average all scores
+        #lowest average score is returned (if more than 1, return list. but I don't know how common that'd be)
+            #based on some early testing: surprisingly common, actually!
+        #OR: do I want to score the most ambiguous outcome (Only keep highest score from the list)
+        #I feel like unless it's SUPER close, or one actually decimates all the competition, average gives a better idea.
+    l_PossiblePlays = []
+    if b_HardMode:
+        l_PossiblePlays = l_WordList
+    else:
+        l_PossiblePlays = l_WholeWordList
+
+
+    l_AverageScore = [0] * len(l_PossiblePlays)
+    l_MaxScore = [0] * len(l_PossiblePlays) #if the average ties with something else, we'll use this to slim the list a bit more.
+    for i in range(len(l_PossiblePlays)):
+        l_PossibleOutcomes = [[0 for x in range(len(l_PossiblePlays))] for y in range(2)]
+        i_PossOutIndex = 0
+        index = 0
+        for j in range(len(l_WordList)):
+            l_outcome = GetWordleResponse(l_PossiblePlays[i],l_WordList[j])
+            try:
+                index = l_PossibleOutcomes[0].index(l_outcome)
+            except:
+                index = i_PossOutIndex
+                i_PossOutIndex+= 1
+            l_PossibleOutcomes[0][index] = l_outcome
+            l_PossibleOutcomes[1][index] += 1
+        #outcomes for this word calculated
+        #calculate average score:
+        i_sum = 0
+        i_divisor = 0
+        for k in range(len(l_PossibleOutcomes[0])):
+            if l_PossibleOutcomes[1][k] > 0:
+                i_sum += l_PossibleOutcomes[1][k]
+                i_divisor += 1
+            else:
+                break
+        if i_divisor > 0:
+            l_AverageScore[i] = i_sum / i_divisor #thankfully in python 3 this gives a float
+        l_MaxScore[i] = max(l_PossibleOutcomes[1])
+    #scores calculated. find the minimum value
+    f_minScore = min(l_AverageScore)
+    i_IndexesOfScore = [i for i, j in enumerate(l_AverageScore) if j == f_minScore]
+    if len(i_IndexesOfScore) == 1:
+        return [l_PossiblePlays[i_IndexesOfScore[0]]]
+    else:
+        i_MinimumMaxScore = 999999
+        i_indexOfMinMax = 0
+        l_OtherWords = []
+        for i in range(len(i_IndexesOfScore)):
+            if l_MaxScore[i_IndexesOfScore[i]] < i_MinimumMaxScore:
+                i_MinimumMaxScore = l_MaxScore[i_IndexesOfScore[i]]
+                i_indexOfMinMax = i_IndexesOfScore[i]
+                l_OtherWords = []
+            elif l_MaxScore[i_IndexesOfScore[i]] == i_MinimumMaxScore:
+                l_OtherWords.append(l_PossiblePlays[i_IndexesOfScore[i]])
+        if len(l_OtherWords) > 0:
+            l_OtherWords.append(l_PossiblePlays[i_indexOfMinMax])
+            return l_OtherWords
+            print("Some equally good words: "+str(l_OtherWords))
+        else:
+            return [l_PossiblePlays[i_indexOfMinMax]]
+    #i_indexOfScore = l_AverageScore.index(f_minScore)
+
 def FindWordWithLetters_refactor(wantedLetters, wordList):
     """Prints words from list wordList with the most number of letters from list wantedLetters.\n
     this was more a proof of concept that the new suggestWord can function much the same. but not exactly. it misses the finer points"""
@@ -702,6 +832,10 @@ if not b_WordleMode:
 else:
     b_KnowAllPositions = False
     b_HardMode = bool(input("Is Hard Mode active? "))
+if not b_KnowAllPositions:
+    b_SuperSearch = bool(input("Enable SuperSearch (Very slow, but the best possible outcome)? "))
+    if not b_SuperSearch:
+        b_SuperSearchConfirmed = False
 build_dictionary(wordLen,bannedChars)
 if not b_HardMode: #only bother populating it if we're gonna use it
     WholeWordList += legalWords
@@ -716,7 +850,7 @@ if (not b_KnowAllPositions) and (not b_WordleMode):
             Letters.append(char)
         FindWordWithLetters(Letters,WholeWordList)
         quit() #why I can't just return when not in a function is beyond me...
-
+b_FirstRun = True
 while len(legalWords) > 1:
     genStats(False)
     print("\n\n\n")
@@ -726,9 +860,16 @@ while len(legalWords) > 1:
         for word in legalWords:
             print(word)
         print("--END OF WORDS--")
+        if not b_SuperSearchConfirmed:
+            b_SuperSearch = bool(input("Do you want to enable SuperSearch now? "))
+            b_SuperSearchConfirmed = True
     #suggestWord(wordLen, unknownPositions, b_KnowAllPositions)
     suggestWord(legalWords, wordLen+1, b_KnowAllPositions, b_HardMode, WholeWordList, [], True, True) #to be most faithful to the first part of the function, I originally used "(1+wordLen-len(unknownPositions))" but wordLen+1 is actually the part used later in the function
+    if b_SuperSearch & (not b_FirstRun):
+        OptimalWord = FindOptimalPlay(legalWords,b_HardMode,WholeWordList)
+        print("SuperSearch Suggestion: "+str(OptimalWord))
     filterWordlist(b_KnowAllPositions, b_WordleMode)
+    b_FirstRun = False
 try:
     print("Your word is: "+legalWords[0])
 except IndexError:
