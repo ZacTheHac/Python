@@ -104,6 +104,15 @@ def optimize_wordlist(wordList,wordLength,bannedCharacters) -> list:
     newWords.sort() #why not have it sorted, too?
     return newWords
 
+def reduce_Wordlist(l_WordList, l_bannedChars = [], l_WantedLetters = [], s_Regex = "") -> list:
+    """Takes in a list of words, and returns only the words that fit certain criteria"""
+    newWords = []
+    for word in l_WordList:
+        if not any(bannedCharacter in l_bannedChars for bannedCharacter in word): #no banned letters
+            if StrContainsAllLettersWithCount(word,l_WantedLetters): #all(needLetter in word for needLetter in neededLetters): #contains the letters we need
+                if re.search(s_Regex, word):
+                    newWords.append(word)
+    return newWords
 
 def genStats(noisy = True) -> None:
     """Pulls words from legalWords and outputs how common certain letters are into the global letterStats (all instances), and wordsContainingLetters (one instance counted per word)"""
@@ -332,13 +341,7 @@ def filterWordlist(hangmanRules,WordleMode) -> None:
                 unknownPositions.append(char)
 
 
-    newLegalWords = []
-    for word in legalWords:
-        if not any(bannedCharacter in bannedChars for bannedCharacter in word): #no banned letters
-            if StrContainsAllLettersWithCount(word,unknownPositions): #all(needLetter in word for needLetter in neededLetters): #contains the letters we need
-                if re.search(knownPositions, word):
-                    newLegalWords.append(word)
-    legalWords = newLegalWords
+    legalWords = reduce_Wordlist(legalWords, bannedChars, unknownPositions, knownPositions)
 
 def str_Insert(s_Original, i_index, s_Insert) -> str:
     """Returns a string with s_Insert placed at i_index"""
@@ -694,12 +697,13 @@ def GetWordleResponse(s_Input, s_Answer) -> str:
         s_Output += l_Evaluation[i]
     return s_Output
 
-def FindOptimalPlay(l_WordList, b_HardMode = True, l_WholeWordList = []) -> list:
+def FindOptimalPlay(l_WordList, b_HardMode = True, l_WholeWordList = [], b_Noisy = True) -> list:
     """A rather expensive function. runs in ~ O(n*m) time, depending on the length of the lists put in.
     BUT: should give the best possible wordle play, or pretty close to it!
     l_WordList is a list of all the answers
     b_HardMode tells the function if hardmode is active
     l_WholeWordList lists all playable words, is only used if b_HardMode is True"""
+    i_MaxOutput = 50 #this is the most words this function will return
     #Find all the words in WholeWordList that could help (have unknown letters and/or unknown positions in a position to test), or use WordList if hardmode is on
     #of that list, find the word that gives the best outcome on average, no matter the response
         #find all possible responses (grey, yellows, greens) given the wordlist
@@ -710,14 +714,16 @@ def FindOptimalPlay(l_WordList, b_HardMode = True, l_WholeWordList = []) -> list
         #OR: do I want to score the most ambiguous outcome (Only keep highest score from the list)
         #I feel like unless it's SUPER close, or one actually decimates all the competition, average gives a better idea.
     l_PossiblePlays = []
-    if b_HardMode:
-        l_PossiblePlays = l_WordList
-    else:
-        l_PossiblePlays = l_WholeWordList
+    l_PossiblePlays.extend(l_WordList) #Have to do it like this or it modifies the answerlist for SOME REASON?!
+    if not b_HardMode:
+        l_PossiblePlays.extend(reduce_Wordlist(l_WholeWordList, [], mostCommonLetters(1,True,False), str("")))
+        #often this would cause lockups that lasted almost a minute. By trimming down the list we search by requiring it have the most popular letter, we can still get great results in 1/4 the time.
+        #however, if the answers are possible solutions, we want them on there first. Only relevant if they're providing perfect scores, but it happens enough.
 
 
     l_AverageScore = [0] * len(l_PossiblePlays)
     l_MaxScore = [0] * len(l_PossiblePlays) #if the average ties with something else, we'll use this to slim the list a bit more.
+    PerfectScoreCount = 0 #in some scenarios, there's dozens of words that give a perfect score. It's not worth it to provide more than ~5?
     for i in range(len(l_PossiblePlays)):
         l_PossibleOutcomes = [[0 for x in range(len(l_PossiblePlays))] for y in range(2)]
         i_PossOutIndex = 0
@@ -743,30 +749,66 @@ def FindOptimalPlay(l_WordList, b_HardMode = True, l_WholeWordList = []) -> list
                 break
         if i_divisor > 0:
             l_AverageScore[i] = i_sum / i_divisor #thankfully in python 3 this gives a float
+            if l_AverageScore[i] == 1:
+                PerfectScoreCount += 1
+                if PerfectScoreCount >= i_MaxOutput:
+                    if b_Noisy:
+                        print("Cutting list short. Many Perfect Solutions found.")
+                    l_MaxScore[i] = max(l_PossibleOutcomes[1]) #make sure to do this before it breaks out, just in case.
+                    l_AverageScore = l_AverageScore[:i+1] #trim the array
+                    l_MaxScore = l_MaxScore[:i+1] #Trim the Max Score array, too (was causing errors elsewhere)
+                    break
         l_MaxScore[i] = max(l_PossibleOutcomes[1])
+    
+    if b_Noisy:
+        i_MinimumMaxScore = min(l_MaxScore)
+        #i_MinimumMaxScore = min(i for i in l_MaxScore if i>0) #Want to only get outcomes that result in words, so score must be > 0. Turns out this was caused by stopping word generation, and only trimming one of the arrays
+        l_IndexesOfScore = [i for i, j in enumerate(l_MaxScore) if j == i_MinimumMaxScore]
+        print("The minimum of the maximum words left overall is "+str(i_MinimumMaxScore))
+        f_averageAverageScore = 0
+        l_Output = []
+        f_MinimumAverage = 9999
+        l_MinAverageList = []
+        for i in range(len(l_IndexesOfScore)):
+            l_Output.append(l_PossiblePlays[l_IndexesOfScore[i]])
+            if (l_AverageScore[l_IndexesOfScore[i]]) < f_MinimumAverage:
+                l_MinAverageList = []
+                f_MinimumAverage = l_AverageScore[l_IndexesOfScore[i]]
+                l_MinAverageList.append(l_PossiblePlays[l_IndexesOfScore[i]])
+            elif (l_AverageScore[l_IndexesOfScore[i]]) == f_MinimumAverage:
+                l_MinAverageList.append(l_PossiblePlays[l_IndexesOfScore[i]])
+            f_averageAverageScore += l_AverageScore[l_IndexesOfScore[i]]
+        f_averageAverageScore = f_averageAverageScore/len(l_IndexesOfScore)
+        print("With an average of "+"{:.3f}".format(f_averageAverageScore)+" words left.")
+        print("For the words:          "+str(l_Output))
+        print("But a minimum average of "+"{:.3f}".format(f_MinimumAverage)+" words left")
+        print("For the words:          "+str(l_MinAverageList))
+
+    
+    
     #scores calculated. find the minimum value
     f_minScore = min(l_AverageScore)
+    if b_Noisy:
+        print("On average, SuperSearch will result in "+"{:.3f}".format(f_minScore)+" words left.")
     i_IndexesOfScore = [i for i, j in enumerate(l_AverageScore) if j == f_minScore]
     if len(i_IndexesOfScore) == 1:
+        if b_Noisy:
+            print("With a the maximum being "+str(l_MaxScore[i_IndexesOfScore[0]]))
         return [l_PossiblePlays[i_IndexesOfScore[0]]]
     else:
         i_MinimumMaxScore = 999999
         i_indexOfMinMax = 0
-        l_OtherWords = []
+        l_OutputWords = []
         for i in range(len(i_IndexesOfScore)):
             if l_MaxScore[i_IndexesOfScore[i]] < i_MinimumMaxScore:
                 i_MinimumMaxScore = l_MaxScore[i_IndexesOfScore[i]]
                 i_indexOfMinMax = i_IndexesOfScore[i]
-                l_OtherWords = []
+                l_OutputWords = [l_PossiblePlays[i_IndexesOfScore[i]]]
             elif l_MaxScore[i_IndexesOfScore[i]] == i_MinimumMaxScore:
-                l_OtherWords.append(l_PossiblePlays[i_IndexesOfScore[i]])
-        if len(l_OtherWords) > 0:
-            l_OtherWords.append(l_PossiblePlays[i_indexOfMinMax])
-            return l_OtherWords
-            print("Some equally good words: "+str(l_OtherWords))
-        else:
-            return [l_PossiblePlays[i_indexOfMinMax]]
-    #i_indexOfScore = l_AverageScore.index(f_minScore)
+                l_OutputWords.append(l_PossiblePlays[i_IndexesOfScore[i]])
+        if b_Noisy:
+            print("With a the maximum being "+str(i_MinimumMaxScore))
+        return l_OutputWords #This used to only hold extra choices, but now it holds all of them. Just streamlines the code.
 
 def FindWordWithLetters_refactor(wantedLetters, wordList):
     """Prints words from list wordList with the most number of letters from list wantedLetters.\n
