@@ -221,9 +221,15 @@ def filterWordlist(hangmanRules,WordleMode) -> None:
         s_WordOutcome = input("How did that go for you? (y=yellow, g=green, anything else = grey) ").lower()
         #yellows added to unknowPositions, Greens added to filter, greys added to banned chars
         #edge cases: guessed a double letter when only a single exists. make sure to not add it to banned. however, it also means the letter is not there.
-        if len(s_WordOutcome) < len(s_WordAttempt):
+        if (len(s_WordAttempt) != wordLen) and not b_AnyWordLength:
+            print("That word isn't the length we're looking for. I'm going to assume that was erroneous.")
+            return
+        elif len(s_WordOutcome) < len(s_WordAttempt):
             print("You're that lazy? Going to assume the rest are grey.")
             s_WordOutcome = s_WordOutcome.ljust(len(s_WordAttempt),".")
+        elif len(s_WordOutcome) > len(s_WordAttempt):
+            print("That response is too long. I'm going to assume that was erroneous.")
+            return
         s_FilterString = ""
         l_GreenLetters = []
         l_YellowLetters = []
