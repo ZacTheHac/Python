@@ -244,13 +244,13 @@ def filterWordlist(hangmanRules,WordleMode) -> None:
         #check for double letters while filling out bannedChars
         l_FoundAll = []
         for i in range(len(l_GreyLetters)):
-            if l_GreyLetters[i] in l_GreenLetters:
-                print("Looks like there's no more \""+l_GreyLetters[i]+"\"s in the word.")
-                l_FoundAll.append(l_GreyLetters[i])
-                l_GreyLetters[i] = ""
-            elif l_GreyLetters[i] in l_YellowLetters:
+            if l_GreyLetters[i] in l_YellowLetters: #we have to check for yellow first or it'll fullban the letter despite not knowing the position. (see: eerie y.g.g for scree)
                 print("Looks like there's no more \""+l_GreyLetters[i]+"\"s in the word.")
                 #We don't know where it goes, so fullban isn't possible, and we already added it to filter string. so just remove the entry
+                l_GreyLetters[i] = ""
+            elif l_GreyLetters[i] in l_GreenLetters:
+                print("Looks like there's no more \""+l_GreyLetters[i]+"\"s in the word.")
+                l_FoundAll.append(l_GreyLetters[i])
                 l_GreyLetters[i] = ""
             else:
                 bannedChars.append(l_GreyLetters[i])
