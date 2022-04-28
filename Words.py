@@ -52,7 +52,10 @@ def build_dictionary(wordLength,bannedCharacters):
     #load infochimps/dwyl dictionary
     #load_dict("Wordlists/words_alpha.txt",legalWords)
 
-    #load combined file that eliminated 7,506,911 duplicates (~7MB)
+    #Load YAWL by Mendel Leo Cooper
+    #load_dict("Wordlists/YAWL.txt",legalWords)
+
+    #load combined file that eliminated 7,506,911 duplicates (~7MB), 571,985 words (Now expanded with YAWL to 578,747)
     #load_dict("Wordlists/MEGADICT.txt",legalWords)
 
     #load wordle answer list (sorted, so it can't be directly used for cheating)
@@ -720,11 +723,18 @@ def FindOptimalPlay(l_WordList, b_HardMode = True, l_WholeWordList = [], b_Noisy
         #OR: do I want to score the most ambiguous outcome (Only keep highest score from the list)
         #I feel like unless it's SUPER close, or one actually decimates all the competition, average gives a better idea.
     l_PossiblePlays = []
-    l_PossiblePlays.extend(l_WordList) #Have to do it like this or it modifies the answerlist for SOME REASON?!
+    l_PossiblePlays.extend(l_WordList) #Have to do it like this or it modifies the answerlist for SOME REASON?! Point is: I want the answers to be first if they work
     if not b_HardMode:
-        l_PossiblePlays.extend(reduce_Wordlist(l_WholeWordList, [], mostCommonLetters(1,True,False), str("")))
-        #often this would cause lockups that lasted almost a minute. By trimming down the list we search by requiring it have the most popular letter, we can still get great results in 1/4 the time.
-        #however, if the answers are possible solutions, we want them on there first. Only relevant if they're providing perfect scores, but it happens enough.
+        if b_Noisy:
+            l_PossiblePlays.extend(l_WholeWordList)
+            #if we're looking at whole debug stuff, we probably want the best no matter what.
+        else:
+            l_PossiblePlays.extend(reduce_Wordlist(l_WholeWordList, [], mostCommonLetters(1,True,False), str("")))
+            #often this would cause lockups that lasted almost a minute. By trimming down the list we search by requiring it have the most popular letter, we can still get great results in 1/4 the time.
+            #however, if the answers are possible solutions, we want them on there first. Only relevant if they're providing perfect scores, but it happens enough.
+    #dedupe the list just in case the answer list is contained in the whole list (as it most certainly is):
+    l_PossiblePlays = list(dict.fromkeys(l_PossiblePlays))
+
 
 
     l_AverageScore = [0] * len(l_PossiblePlays)
