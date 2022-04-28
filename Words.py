@@ -117,101 +117,101 @@ def reduce_Wordlist(l_WordList, l_bannedChars = [], l_WantedLetters = [], s_Rege
                     newWords.append(word)
     return newWords
 
-def genStats(noisy = True) -> None:
-    """Pulls words from legalWords and outputs how common certain letters are into the global letterStats (all instances), and wordsContainingLetters (one instance counted per word)"""
-    global letterStats
-    global wordsContainingLetters
-    global legalWords
+def genStats(l_WordList, l_WordStats = None, l_LetterStats = None, noisy = True) -> None:
+    """Pulls words from l_WordList and outputs how common certain letters are in l_LetterStats (Including duplicate letters), and l_WordStats (one instance counted per word)
+    Setting either output list as None skips that calculation.
+    noisy will output extra info to the console."""
+    #note: to replace lists, you have to modify them directly. assigning them breaks the initial link, so you don't modify the original
 
-    totalChars=0
-    newLetterStats = [0] * 26
-    for word in legalWords:
-        for char in word:
-            try:
-                ind = string.ascii_letters.index(char)
-                newLetterStats[ind] += 1
-                #print(str(char)+"'s = "+str(letterStats[ind]))
-                totalChars += 1
-            except ValueError:
-                print("Non-ascii character found: "+char)
-    letterStats = newLetterStats
+    if l_LetterStats is not None:
+        totalChars=0
+        #clear array
+        for i in range(len(l_LetterStats)):
+            l_LetterStats[i] = 0
+        for word in l_WordList:
+            for char in word:
+                try:
+                    ind = string.ascii_letters.index(char)
+                    l_LetterStats[ind] += 1
+                    totalChars += 1
+                except ValueError:
+                    print("Non-ascii character found: "+char)
+        if noisy:
+            maxCount = max(l_LetterStats)
+            #find all instances of that count
+            maxLetters = [i for i, j in enumerate(l_LetterStats) if j == maxCount]
+            #normalize the indexes into characters
+            for i in range(len(maxLetters)):
+                maxLetters[i] = chr(maxLetters[i]+97)
+            if len(maxLetters) > 1:
+                letters = ""
+                for letter in maxLetters:
+                    letters += letter
+                    letters += ", "
+                print("Most common letters are: "+letters+"with "+str(maxCount)+" occurrences each.")
+            else:
+                print("Most common letter is: "+str(maxLetters[0])+" with "+str(maxCount)+" occurrences.")
+
+            minCount = min(l_LetterStats)
+            minLetters = [i for i, j in enumerate(l_LetterStats) if j == minCount]
+            for i in range(len(minLetters)):
+                minLetters[i] = chr(minLetters[i]+97)
+            if len(minLetters) > 1:
+                letters = ""
+                for letter in minLetters:
+                    letters += letter
+                    letters += ", "
+                print("The least common letters are: "+letters+"with only "+str(minCount)+" occurances each.")
+            else:
+                print("The least common letter is: "+str(minLetters[0])+" with only "+str(minCount)+" occurances.")
+
+
+            print("Total characters counted: "+str(totalChars))
 
     #more useful counts: only count one instance per word
-    charsSeen = []
-    newWordsContainingLetters = [0]*26
-    for word in legalWords:
-        for char in word:
-            try:
-                if char not in charsSeen:
-                    charsSeen.append(char)
-                    ind = string.ascii_letters.index(char)
-                    newWordsContainingLetters[ind] += 1
-            except ValueError:
-                print("Non-ascii character found: "+char)
+    if l_WordStats is not None:
         charsSeen = []
-    wordsContainingLetters = newWordsContainingLetters
+        for i in range(len(l_WordStats)):
+            l_WordStats[i] = 0
+        for word in l_WordList:
+            for char in word:
+                try:
+                    if char not in charsSeen:
+                        charsSeen.append(char)
+                        ind = string.ascii_letters.index(char)
+                        l_WordStats[ind] += 1
+                except ValueError:
+                    print("Non-ascii character found: "+char)
+            charsSeen = []
+        if noisy:
+            maxCount = max(l_WordStats)
+            #find all instances of that count
+            maxLetters = [i for i, j in enumerate(l_WordStats) if j == maxCount]
+            #normalize the indexes into characters
+            for i in range(len(maxLetters)):
+                maxLetters[i] = chr(maxLetters[i]+97)
 
-    if noisy:
-        maxCount = max(letterStats)
-        #find all instances of that count
-        maxLetters = [i for i, j in enumerate(letterStats) if j == maxCount]
-        #normalize the indexes into characters
-        for i in range(len(maxLetters)):
-            maxLetters[i] = chr(maxLetters[i]+97)
-        if len(maxLetters) > 1:
-            letters = ""
-            for letter in maxLetters:
-                letters += letter
-                letters += ", "
-            print("Most common letters are: "+letters+"with a count of "+str(maxCount)+" each.")
-        else:
-            print("Most common letter is: "+str(maxLetters[0])+" with a count of "+str(maxCount)+".")
+            if len(maxLetters) > 1:
+                letters = ""
+                for letter in maxLetters:
+                    letters += letter
+                    letters += ", "
+                print("Most common letters are: "+letters+" in "+str(maxCount)+" words each.")
+            else:
+                print("Most common letter is: "+str(maxLetters[0])+" in "+str(maxCount)+" words.")
 
-        minCount = min(letterStats)
-        minLetters = [i for i, j in enumerate(letterStats) if j == minCount]
-        for i in range(len(minLetters)):
-            minLetters[i] = chr(minLetters[i]+97)
-        if len(minLetters) > 1:
-            letters = ""
-            for letter in minLetters:
-                letters += letter
-                letters += ", "
-            print("The least common letters are: "+letters+"with only "+str(minCount)+" occurances each.")
-        else:
-            print("The least common letter is: "+str(minLetters[0])+" with only "+str(minCount)+" occurances.")
-    
-    
-        print("Total characters counted: "+str(totalChars))
-
-    if noisy:
-        maxCount = max(wordsContainingLetters)
-        #find all instances of that count
-        maxLetters = [i for i, j in enumerate(wordsContainingLetters) if j == maxCount]
-        #normalize the indexes into characters
-        for i in range(len(maxLetters)):
-            maxLetters[i] = chr(maxLetters[i]+97)
-
-        if len(maxLetters) > 1:
-            letters = ""
-            for letter in maxLetters:
-                letters += letter
-                letters += ", "
-            print("Most common letters are: "+letters+"with "+str(maxCount)+" words each.")
-        else:
-            print("Most common letter is: "+str(maxLetters[0])+" in "+str(maxCount)+" words.")
-
-        minCount = min(wordsContainingLetters)
-        minLetters = [i for i, j in enumerate(wordsContainingLetters) if j == minCount]
-        for i in range(len(minLetters)):
-            minLetters[i] = chr(minLetters[i]+97)
-        if len(minLetters) > 1:
-            letters = ""
-            for letter in minLetters:
-                letters += letter
-                letters += ", "
-            print("The least common letters are: "+letters+"in only "+str(minCount)+" words each.")
-        else:
-            print("The least common letter is: "+str(minLetters[0])+" in only "+str(minCount)+" words.")
+            minCount = min(l_WordStats)
+            minLetters = [i for i, j in enumerate(l_WordStats) if j == minCount]
+            for i in range(len(minLetters)):
+                minLetters[i] = chr(minLetters[i]+97)
+            if len(minLetters) > 1:
+                letters = ""
+                for letter in minLetters:
+                    letters += letter
+                    letters += ", "
+                print("The least common letters are: "+letters+"in only "+str(minCount)+" words each.")
+            else:
+                print("The least common letter is: "+str(minLetters[0])+" in only "+str(minCount)+" words.")
 
 def filterWordlist(hangmanRules,WordleMode) -> None:
     global bannedChars
@@ -910,7 +910,7 @@ if (not b_KnowAllPositions) and (not b_WordleMode):
         quit() #why I can't just return when not in a function is beyond me...
 b_FirstRun = True
 while len(legalWords) > 1:
-    genStats(False)
+    genStats(legalWords, wordsContainingLetters, None, False) #the "None" could be replaced with "letterStats" but honestly: I never ended up using it. So processing it is a waste of time.
     print("\n\n\n")
     print(str(len(legalWords))+" words remaining.")
     if len(legalWords)<=75:
