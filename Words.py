@@ -371,7 +371,7 @@ def StrContainsAllLettersWithCount(s_Word, l_Letters) -> bool:
     #if it got this far, it's a pass
     return True
 
-def mostCommonLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordList:list[str] = None, l_LetterCounts:list[int] = None, l_2DLetterList:list = None, noisy:bool = True) -> list:
+def mostCommonLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordList:list[str] = None, l_LetterCounts:list[int] = None, l_2DLetterList:list = None, l_IgnoredLetters:list[str] = None, noisy:bool = True) -> list:
     """Returns the most common letters in the wordlist. \n
     i_MaxLetters = maximum number of letters to return (will return fewer if fewer exist)\n
     i_MinCount = The Lowest number of hits that this function will return, inclusive. \n
@@ -416,21 +416,20 @@ def mostCommonLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordLi
             else:
                 break #all the top words are gonna be at the front of the list. if one is below that length, we know there are no more.
             #technically, there could be more known letters after the check fails once, but realistically, if we're not filtering, we probably just want the top unknown result.
+
+    if l_IgnoredLetters is not None:
+        for i in range(len(l_CombinedList)-1,-1,-1): #iterate backwards so the index doesn't change on me
+            if l_CombinedList[i][0] in l_IgnoredLetters:
+                del l_CombinedList[i]
+
     #at this point, all zero counts and max counts (assuming filterMaxCounts is set) are removed. The list is also sorted.
     #just need to trim it to final size
     if len(l_CombinedList)>i_MaxLetters:
         l_CombinedList = l_CombinedList[0:i_MaxLetters]
 
     if noisy & (len(l_CombinedList)>0):
-        print("Top "+str(len(l_CombinedList))+" unknown letters:")
-        i_width = len(str(l_CombinedList[0][1])) #the longest number is this many chars wide
-        str_Letters = "| "
-        str_Counts = "| "
-        for i in range(len(l_CombinedList)):
-            str_Counts += str(l_CombinedList[i][1]).center(i_width," ")+" | "
-            str_Letters += str(l_CombinedList[i][0]).center(i_width," ")+" | "
-        print(str_Letters)
-        print(str_Counts)
+        print(str(len(l_CombinedList))+" most common letters:")
+        printLetters(None,None,None,None,l_CombinedList)
 
     sortedTopLetters = []
     for i in range(len(l_CombinedList)):
@@ -507,14 +506,7 @@ def medianLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordList:l
 
     if noisy & (len(l_CombinedList)>0):
         print("Middle "+str(len(l_CombinedList))+" letters:")
-        i_width = len(str(l_CombinedList[0][1])) #the longest number is this many chars wide
-        str_Letters = "| "
-        str_Counts = "| "
-        for i in range(len(l_CombinedList)):
-            str_Counts += str(l_CombinedList[i][1]).center(i_width," ")+" | "
-            str_Letters += str(l_CombinedList[i][0]).center(i_width," ")+" | "
-        print(str_Letters)
-        print(str_Counts)
+        printLetters(None,None,None,None,l_CombinedList)
 
     filteredMedianLetters = []
     for i in range(len(l_CombinedList)):
@@ -573,6 +565,58 @@ def leastCommonLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordL
 
     if noisy & (len(l_CombinedList)>0):
         print("Rarest "+str(len(l_CombinedList))+" occuring letters:")
+        printLetters(None,None,None,None,l_CombinedList)
+
+    sortedLowestLetters = []
+    for i in range(len(l_CombinedList)):
+        sortedLowestLetters.append(l_CombinedList[i][0])
+    return sortedLowestLetters
+
+def printLetters(l_WordList:list[str], i_MinCount:int = 1, i_MaxCount:int = None, l_LetterCounts:list[int] = None, l_2DLetterList:list = None) -> None:
+    """
+    i_MinCount = The Lowest number of hits that this function will return, inclusive. \n
+    i_MaxCount = the highest number of hits the letter can have to be returned, exclusive. Useful for ignoring letters that are in every word.\n
+    Provide one of the following:\n
+        l_WordList = the wordlist to operate on. Can provide this \n
+        l_LetterCounts = a list of how common letters are, with the index of the list referring to their ASCII offset from 97(a)\n
+        l_2DLetterList = an array of 2 arrays that contains the character in [i][0], and its count in [i][1] \n
+    Set values to None if they're unused\n"""
+
+    l_CombinedList = [[0 for x in range(2)] for y in range(26)]
+
+    if l_2DLetterList is None:
+        #have to make the list myself
+        if l_LetterCounts is None:
+            #calculate with genstats and build
+            l_LetterCounts = [0] * 26
+            genStats(l_WordList,l_LetterCounts)
+        
+        for i in range(26):
+            l_CombinedList[i][0] = chr(i+97)
+            l_CombinedList[i][1] = l_LetterCounts[i]
+            #to access: [i][0] is the letter, [i][1] is the count
+    else:
+        l_CombinedList = l_2DLetterList
+
+    #sort the list via the counts, in reverse order because I like the largest values on the left
+    l_CombinedList = sorted(l_CombinedList, key=lambda x: x[1], reverse=True)
+
+    if i_MinCount is not None:
+        #make a list of values that are all nonzero
+        for i in range(len(l_CombinedList)-1,-1,-1): #iterate backwards so the index doesn't change on me
+            if l_CombinedList[i][1] < i_MinCount:
+                del l_CombinedList[i]
+            else:
+                break #once we hit a non-zero value, we know there's no more zeros as the list is sorted.
+    if i_MaxCount is not None:
+        for i in range(len(l_CombinedList)):
+            if l_CombinedList[0][1] >= i_MaxCount:
+                del l_CombinedList[0]
+            else:
+                break #all the top words are gonna be at the front of the list. if one is below that length, we know there are no more.
+    #at this point, all zero counts and max counts (assuming filterMaxCounts is set) are removed. The list is also sorted.
+
+    if len(l_CombinedList)>0:
         i_width = len(str(l_CombinedList[0][1])) #the longest number is this many chars wide
         str_Letters = "| "
         str_Counts = "| "
@@ -582,12 +626,6 @@ def leastCommonLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordL
         print(str_Letters)
         print(str_Counts)
 
-    sortedLowestLetters = []
-    for i in range(len(l_CombinedList)):
-        sortedLowestLetters.append(l_CombinedList[i][0])
-    return sortedLowestLetters
-
-#TODO: Use input letter list
 def printAllLetters(filterMaxCounts = False) -> None:
     global wordsContainingLetters
     global legalWords
@@ -626,7 +664,7 @@ def printAllLetters(filterMaxCounts = False) -> None:
         print(str_Letters)
         print(str_Counts)
 
-def suggestWord(wordList, numberOfLetters, hangmanRules=False, hardMode = True, wholeWordList = [], wantedLetters = [], noisy = True, returnList = False) -> list:
+def suggestWord(wordList, numberOfLetters, l_KnownLetters:list[str] = [], hangmanRules=False, hardMode = True, wholeWordList = [], wantedLetters = [], noisy = True, returnList = False) -> list:
     """Prints words from list wordList that contain the most number of letters returned by mostCommonLetters()\n\n
     wordList is a list of valid words to pick from\n
     numberOfLetters is how many letters to get from mostCommonLetters() to try to cram into the word\n
@@ -647,16 +685,23 @@ def suggestWord(wordList, numberOfLetters, hangmanRules=False, hardMode = True, 
             mcLetters = mostCommonLetters(numberOfLetters, 1, len(wordList), wordList, None, None, noisy)
         
         if noisy:
-            printAllLetters(not hangmanRules)
+            if hangmanRules:
+                printLetters(wordList, 1, None)
+            else:
+                printLetters(wordList, 1, len(wordList))
             #midLetters = medianLetters(numberOfLetters, 1, None, wordList, None, None, noisy)
             #lcLetters = leastCommonLetters(numberOfLetters, 1, None, wordList, None, None, noisy)
     else:
         mcLetters = wantedLetters #this just makes it easier for the code to work
 
     if(hangmanRules):
-        if noisy:
-            print("I would suggest trying \""+str(mcLetters[0])+"\".")
-        return [str(mcLetters[0])]
+        for i in range(len(mcLetters)):
+            if mcLetters[i] not in l_KnownLetters: #mcLetters[i] is not already known.
+                if noisy:
+                    print("I would suggest trying \""+str(mcLetters[i])+"\".")
+                return [str(mcLetters[i])]
+            
+        
 
     if (not hardMode) and (len(wordList)>3): #if there's only 2 words in the wordlist, it takes less guesses to just try them both. 3 is more or less the same.
         wordList = wholeWordList
@@ -885,7 +930,7 @@ def FindOptimalPlay(l_WordList, b_HardMode = True, l_WholeWordList = [], b_Noisy
 def FindWordWithLetters_refactor(wantedLetters, wordList):
     """Prints words from list wordList with the most number of letters from list wantedLetters.\n
     this was more a proof of concept that the new suggestWord can function much the same. but not exactly. it misses the finer points"""
-    foundWords = suggestWord(wordList, 0, False, False, [], wantedLetters, True, True)
+    foundWords = suggestWord(wordList, 0, [], False, False, [], wantedLetters, True, True)
     if len(foundWords) == 1:
         print("The only/best word I can find is \""+foundWords[0]+"\".")
     elif len(foundWords) > 1:
@@ -978,7 +1023,7 @@ while len(legalWords) > 1:
             b_SuperSearch = bool(input("Do you want to enable SuperSearch now? "))
             b_SuperSearchConfirmed = True
     #suggestWord(wordLen, unknownPositions, b_KnowAllPositions)
-    suggestWord(legalWords, wordLen+1, b_KnowAllPositions, b_HardMode, WholeWordList, [], True, True) #to be most faithful to the first part of the function, I originally used "(1+wordLen-len(unknownPositions))" but wordLen+1 is actually the part used later in the function
+    suggestWord(legalWords, wordLen+1, unknownPositions, b_KnowAllPositions, b_HardMode, WholeWordList, [], True, True) #to be most faithful to the first part of the function, I originally used "(1+wordLen-len(unknownPositions))" but wordLen+1 is actually the part used later in the function
     if b_SuperSearch & (not b_FirstRun):
         OptimalWord = FindOptimalPlay(legalWords,b_HardMode,WholeWordList)
         print("SuperSearch Suggestion: "+str(OptimalWord))
