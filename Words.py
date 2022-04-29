@@ -437,36 +437,57 @@ def mostCommonLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordLi
         sortedTopLetters.append(l_CombinedList[i][0])
     return sortedTopLetters
 
-def medianLetters(maxLetters, noisy = True) -> list:
-    """Returns a list of the letter that occurs the high median in the global \"legalWords\" based on values found in the global \"wordsContainingLetters\"\n
-    All 0 counts are removed from consideration, so the median returned may be higher than the whole list would suggest.\n
-    if maxLetters>1, the further items will be the letters surrounding the median letter\n
-    if maxLetters is even, the true median will be right after the halfway point, and the found letters will fill the first half\n
-    if maxLetters is odd, the high median will be in the center of the returned list.\n
-    noisy determines if the function prints out its findings to the console. True is to print, and is the default
-    """
+def medianLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordList:list[str] = None, l_LetterCounts:list[int] = None, l_2DLetterList:list = None, noisy:bool = True) -> list:
+    """Returns a list of the letter that occurs the high median in the wordlist. \n
+    i_MaxLetters = maximum number of letters to return (will return fewer if fewer exist)\n
+    i_MinCount = The Lowest number of hits that this function will return, inclusive. \n
+    i_MaxCount = the highest number of hits the letter can have to be returned, exclusive. Useful for ignoring letters that are in every word.\n
+        l_WordList = the wordlist to operate on. Can provide this or: \n
+        l_LetterCounts = a list of how common letters are, with the index of the list referring to their ASCII offset from 97 (a) or finally:\n
+        l_2DLetterList = an array of 2 arrays that contains the character in [i][0], and its count in [i][1] \n
+            Set values to None if they're unused\n
+    if i_MaxLetters>1, the further items will be the letters surrounding the median letter\n
+    if i_MaxLetters is even, the true median will be right after the halfway point, and the found letters will fill the first half\n
+    if i_MaxLetters is odd, the high median will be in the center of the returned list.\n"""
 
-    global wordsContainingLetters
-    global legalWords
-    
     l_CombinedList = [[0 for x in range(2)] for y in range(26)]
-    for i in range(26):
-        l_CombinedList[i][0] = chr(i+97)
-        l_CombinedList[i][1] = wordsContainingLetters[i]
-        #to access: [i][0] is the letter, [i][1] is the count
+
+    if l_2DLetterList is None:
+        #have to make the list myself
+        if l_LetterCounts is None:
+            #calculate with genstats and build
+            l_LetterCounts = [0] * 26
+            genStats(l_WordList,l_LetterCounts)
+        
+        for i in range(26):
+            l_CombinedList[i][0] = chr(i+97)
+            l_CombinedList[i][1] = l_LetterCounts[i]
+            #to access: [i][0] is the letter, [i][1] is the count
+    else:
+        l_CombinedList = l_2DLetterList
+        
 
     #sort the list via the counts, in reverse order because I like the largest values on the left
     l_CombinedList = sorted(l_CombinedList, key=lambda x: x[1], reverse=True)
 
-    #make a list of values that are all nonzero
-    for i in range(len(l_CombinedList)-1,-1,-1): #iterate backwards so the index doesn't change on me
-        if l_CombinedList[i][1] == 0:
-            del l_CombinedList[i]
-        else:
-            break #once we hit a non-zero value, we know there's no more zeros as the list is sorted.
+    if i_MinCount is not None:
+        #make a list of values that are all greater than or equal to the minimum count
+        for i in range(len(l_CombinedList)-1,-1,-1): #iterate backwards so the index doesn't change on me
+            if l_CombinedList[i][1] < i_MinCount:
+                del l_CombinedList[i]
+            else:
+                break #once we hit a non-zero value, we know there's no more zeros as the list is sorted.
 
-    #l_MedianLetters = [[0 for x in range(2)] for y in range(maxLetters)]
-    i_CutAmount = len(l_CombinedList) - maxLetters
+    if i_MaxCount is not None:
+        for i in range(len(l_CombinedList)):
+            if l_CombinedList[0][1] >= i_MaxCount:
+                del l_CombinedList[0]
+            else:
+                break #all the top words are gonna be at the front of the list. if one is below that length, we know there are no more.
+            #technically, there could be more known letters after the check fails once, but realistically, if we're not filtering, we probably just want the top unknown result.
+    #at this point, all zero counts and max counts (assuming filterMaxCounts is set) are removed. The list is also sorted.
+    #just need to trim it to final size
+    i_CutAmount = len(l_CombinedList) - i_MaxLetters
     if i_CutAmount > 0:
         if i_CutAmount % 2 == 0: #even cuts
             i_cut = math.floor(i_CutAmount/2)
@@ -484,15 +505,8 @@ def medianLetters(maxLetters, noisy = True) -> list:
             #for i in range(len(l_CombinedList)-1,len(l_CombinedList)-i_cut-1,-1):#technically also works, but is really ugly to look at
             #    del l_CombinedList[i]
 
-
-    #filter out nonsense values if they exist
-    filteredMedianLetters = []
-    for i in range(len(l_CombinedList)):
-        if((l_CombinedList[i][1] < len(legalWords))):
-            filteredMedianLetters.append(l_CombinedList[i][0])
-
     if noisy & (len(l_CombinedList)>0):
-        print("middle "+str(len(l_CombinedList))+" letters:")
+        print("Middle "+str(len(l_CombinedList))+" letters:")
         i_width = len(str(l_CombinedList[0][1])) #the longest number is this many chars wide
         str_Letters = "| "
         str_Counts = "| "
@@ -502,6 +516,9 @@ def medianLetters(maxLetters, noisy = True) -> list:
         print(str_Letters)
         print(str_Counts)
 
+    filteredMedianLetters = []
+    for i in range(len(l_CombinedList)):
+        filteredMedianLetters.append(l_CombinedList[i][0])
     return filteredMedianLetters
 
 def leastCommonLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordList:list[str] = None, l_LetterCounts:list[int] = None, l_2DLetterList:list = None, noisy:bool = True) -> list:
@@ -631,8 +648,8 @@ def suggestWord(wordList, numberOfLetters, hangmanRules=False, hardMode = True, 
         
         if noisy:
             printAllLetters(not hangmanRules)
-            #midLetters = medianLetters(numberOfLetters, noisy)
-            #lcLetters = leastCommonLetters(numberOfLetters, noisy)
+            #midLetters = medianLetters(numberOfLetters, 1, None, wordList, None, None, noisy)
+            #lcLetters = leastCommonLetters(numberOfLetters, 1, None, wordList, None, None, noisy)
     else:
         mcLetters = wantedLetters #this just makes it easier for the code to work
 
