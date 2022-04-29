@@ -436,7 +436,7 @@ def mostCommonLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordLi
         sortedTopLetters.append(l_CombinedList[i][0])
     return sortedTopLetters
 
-def medianLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordList:list[str] = None, l_LetterCounts:list[int] = None, l_2DLetterList:list = None, noisy:bool = True) -> list:
+def medianLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordList:list[str] = None, l_LetterCounts:list[int] = None, l_2DLetterList:list = None, l_IgnoredLetters:list[str] = None, noisy:bool = True) -> list:
     """Returns a list of the letter that occurs the high median in the wordlist. \n
     i_MaxLetters = maximum number of letters to return (will return fewer if fewer exist)\n
     i_MinCount = The Lowest number of hits that this function will return, inclusive. \n
@@ -484,6 +484,11 @@ def medianLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordList:l
             else:
                 break #all the top words are gonna be at the front of the list. if one is below that length, we know there are no more.
             #technically, there could be more known letters after the check fails once, but realistically, if we're not filtering, we probably just want the top unknown result.
+
+    if l_IgnoredLetters is not None:
+        for i in range(len(l_CombinedList)-1,-1,-1): #iterate backwards so the index doesn't change on me
+            if l_CombinedList[i][0] in l_IgnoredLetters:
+                del l_CombinedList[i]
     #at this point, all zero counts and max counts (assuming filterMaxCounts is set) are removed. The list is also sorted.
     #just need to trim it to final size
     i_CutAmount = len(l_CombinedList) - i_MaxLetters
@@ -513,7 +518,7 @@ def medianLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordList:l
         filteredMedianLetters.append(l_CombinedList[i][0])
     return filteredMedianLetters
 
-def leastCommonLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordList:list[str] = None, l_LetterCounts:list[int] = None, l_2DLetterList:list = None, noisy:bool = True) -> list:
+def leastCommonLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordList:list[str] = None, l_LetterCounts:list[int] = None, l_2DLetterList:list = None, l_IgnoredLetters:list[str] = None, noisy:bool = True) -> list:
     """Returns the least common letters in the wordlist. \n
     i_MaxLetters = maximum number of letters to return (will return fewer if fewer exist)\n
     i_MinCount = The Lowest number of hits that this function will return, inclusive. \n
@@ -557,7 +562,12 @@ def leastCommonLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordL
                 del l_CombinedList[0]
             else:
                 break #all the top words are gonna be at the front of the list. if one is below that length, we know there are no more.
-            #technically, there could be more known letters after the check fails once, but realistically, if we're not filtering, we probably just want the top unknown result.
+    
+    if l_IgnoredLetters is not None:
+        for i in range(len(l_CombinedList)-1,-1,-1): #iterate backwards so the index doesn't change on me
+            if l_CombinedList[i][0] in l_IgnoredLetters:
+                del l_CombinedList[i]
+    
     #at this point, all zero counts and max counts (assuming filterMaxCounts is set) are removed. The list is also sorted.
     #just need to trim it to final size
     if len(l_CombinedList)>i_MaxLetters:
@@ -626,44 +636,6 @@ def printLetters(l_WordList:list[str], i_MinCount:int = 1, i_MaxCount:int = None
         print(str_Letters)
         print(str_Counts)
 
-def printAllLetters(filterMaxCounts = False) -> None:
-    global wordsContainingLetters
-    global legalWords
-
-    l_CombinedList = [[0 for x in range(2)] for y in range(26)]
-    for i in range(26):
-        l_CombinedList[i][0] = chr(i+97)
-        l_CombinedList[i][1] = wordsContainingLetters[i]
-        #to access: [i][0] is the letter, [i][1] is the count
-
-    #sort the list via the counts, in reverse order because I like the largest values on the left
-    l_CombinedList = sorted(l_CombinedList, key=lambda x: x[1], reverse=True)
-
-    #make a list of values that are all nonzero
-    for i in range(len(l_CombinedList)-1,-1,-1): #iterate backwards so the index doesn't change on me
-        if l_CombinedList[i][1] == 0:
-            del l_CombinedList[i]
-        else:
-            break #once we hit a non-zero value, we know there's no more zeros as the list is sorted.
-    if filterMaxCounts:
-        for i in range(len(l_CombinedList)):
-            if l_CombinedList[0][1] >= len(legalWords):
-                del l_CombinedList[0]
-            else:
-                break #all the top words are gonna be at the front of the list. if one is below that length, we know there are no more.
-    #at this point, all zero counts and max counts (assuming filterMaxCounts is set) are removed. The list is also sorted.
-
-    if len(l_CombinedList)>0:
-        print("Letter frequency in remaining words:")
-        i_width = len(str(l_CombinedList[0][1])) #the longest number is this many chars wide
-        str_Letters = "| "
-        str_Counts = "| "
-        for i in range(len(l_CombinedList)):
-            str_Counts += str(l_CombinedList[i][1]).center(i_width," ")+" | "
-            str_Letters += str(l_CombinedList[i][0]).center(i_width," ")+" | "
-        print(str_Letters)
-        print(str_Counts)
-
 def suggestWord(wordList, numberOfLetters, l_KnownLetters:list[str] = [], hangmanRules=False, hardMode = True, wholeWordList = [], wantedLetters = [], noisy = True, returnList = False) -> list:
     """Prints words from list wordList that contain the most number of letters returned by mostCommonLetters()\n\n
     wordList is a list of valid words to pick from\n
@@ -679,18 +651,18 @@ def suggestWord(wordList, numberOfLetters, l_KnownLetters:list[str] = [], hangma
     if wantedLetters == []:
         if hangmanRules:
             #we want max counts
-            mcLetters = mostCommonLetters(numberOfLetters, 1, None, wordList, None, None, noisy)
+            mcLetters = mostCommonLetters(numberOfLetters, 1, None, wordList, None, None, l_KnownLetters, noisy)
         else:
             #we don't care about max counts
-            mcLetters = mostCommonLetters(numberOfLetters, 1, len(wordList), wordList, None, None, noisy)
+            mcLetters = mostCommonLetters(numberOfLetters, 1, len(wordList), wordList, None, None, l_KnownLetters, noisy)
         
         if noisy:
             if hangmanRules:
                 printLetters(wordList, 1, None)
             else:
                 printLetters(wordList, 1, len(wordList))
-            #midLetters = medianLetters(numberOfLetters, 1, None, wordList, None, None, noisy)
-            #lcLetters = leastCommonLetters(numberOfLetters, 1, None, wordList, None, None, noisy)
+            #midLetters = medianLetters(numberOfLetters, 1, None, wordList, None, None, l_KnownLetters, noisy)
+            #lcLetters = leastCommonLetters(numberOfLetters, 1, None, wordList, None, None, l_KnownLetters, noisy)
     else:
         mcLetters = wantedLetters #this just makes it easier for the code to work
 
@@ -830,7 +802,7 @@ def FindOptimalPlay(l_WordList, b_HardMode = True, l_WholeWordList = [], b_Noisy
             l_PossiblePlays.extend(l_WholeWordList)
             #if we're looking at whole debug stuff, we probably want the best no matter what.
         else:
-            l_PossiblePlays.extend(reduce_Wordlist(l_WholeWordList, [], mostCommonLetters(1, 1, len(l_WordList), l_WordList, None, None, False), str("")))
+            l_PossiblePlays.extend(reduce_Wordlist(l_WholeWordList, [], mostCommonLetters(1, 1, len(l_WordList), l_WordList, None, None, None, False), str("")))
             #often this would cause lockups that lasted almost a minute. By trimming down the list we search by requiring it have the most popular letter, we can still get great results in 1/4 the time.
             #however, if the answers are possible solutions, we want them on there first. Only relevant if they're providing perfect scores, but it happens enough.
     #dedupe the list if answer list is contained in the whole list (as it most certainly is):
