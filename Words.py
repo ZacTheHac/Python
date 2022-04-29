@@ -504,34 +504,55 @@ def medianLetters(maxLetters, noisy = True) -> list:
 
     return filteredMedianLetters
 
-def leastCommonLetters(maxLetters, noisy = True) -> list:
-    global bannedChars
-    global wordsContainingLetters
+def leastCommonLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordList:list[str] = None, l_LetterCounts:list[int] = None, l_2DLetterList:list = None, noisy:bool = True) -> list:
+    """Returns the least common letters in the wordlist. \n
+    i_MaxLetters = maximum number of letters to return (will return fewer if fewer exist)\n
+    i_MinCount = The Lowest number of hits that this function will return, inclusive. \n
+    i_MaxCount = the highest number of hits the letter can have to be returned, exclusive. Useful for ignoring letters that are in every word.\n
+        l_WordList = the wordlist to operate on. Can provide this or: \n
+        l_LetterCounts = a list of how common letters are, with the index of the list referring to their ASCII offset from 97 (a) or finally:\n
+        l_2DLetterList = an array of 2 arrays that contains the character in [i][0], and its count in [i][1] \n
+            Set values to None if they're unused\n"""
 
     l_CombinedList = [[0 for x in range(2)] for y in range(26)]
-    for i in range(26):
-        l_CombinedList[i][0] = chr(i+97)
-        l_CombinedList[i][1] = wordsContainingLetters[i]
-        #to access: [i][0] is the letter, [i][1] is the count
+
+    if l_2DLetterList is None:
+        #have to make the list myself
+        if l_LetterCounts is None:
+            #calculate with genstats and build
+            l_LetterCounts = [0] * 26
+            genStats(l_WordList,l_LetterCounts)
+        
+        for i in range(26):
+            l_CombinedList[i][0] = chr(i+97)
+            l_CombinedList[i][1] = l_LetterCounts[i]
+            #to access: [i][0] is the letter, [i][1] is the count
+    else:
+        l_CombinedList = l_2DLetterList
+        
 
     #sort the list via the counts, in reverse order because I like the largest values on the left
     l_CombinedList = sorted(l_CombinedList, key=lambda x: x[1], reverse=True)
 
-    #make a list of values that are all nonzero
-    for i in range(len(l_CombinedList)-1,-1,-1): #iterate backwards so the index doesn't change on me
-        if l_CombinedList[i][1] == 0:
-            del l_CombinedList[i]
-        else:
-            break #once we hit a non-zero value, we know there's no more zeros as the list is sorted.
-    for i in range(len(l_CombinedList)):
-        if l_CombinedList[0][1] >= len(legalWords):
-            del l_CombinedList[0]
-        else:
-            break #all the top words are gonna be at the front of the list. if one is below that length, we know there are no more.
-    #at this point, all zero & max counts are removed. The list is also sorted.
+    if i_MinCount is not None:
+        #make a list of values that are all greater than or equal to the minimum count
+        for i in range(len(l_CombinedList)-1,-1,-1): #iterate backwards so the index doesn't change on me
+            if l_CombinedList[i][1] < i_MinCount:
+                del l_CombinedList[i]
+            else:
+                break #once we hit a non-zero value, we know there's no more zeros as the list is sorted.
+
+    if i_MaxCount is not None:
+        for i in range(len(l_CombinedList)):
+            if l_CombinedList[0][1] >= i_MaxCount:
+                del l_CombinedList[0]
+            else:
+                break #all the top words are gonna be at the front of the list. if one is below that length, we know there are no more.
+            #technically, there could be more known letters after the check fails once, but realistically, if we're not filtering, we probably just want the top unknown result.
+    #at this point, all zero counts and max counts (assuming filterMaxCounts is set) are removed. The list is also sorted.
     #just need to trim it to final size
-    if len(l_CombinedList)>maxLetters:
-        l_CombinedList = l_CombinedList[len(l_CombinedList)-maxLetters:]
+    if len(l_CombinedList)>i_MaxLetters:
+        l_CombinedList = l_CombinedList[len(l_CombinedList)-i_MaxLetters:]
 
     if noisy & (len(l_CombinedList)>0):
         print("Rarest "+str(len(l_CombinedList))+" occuring letters:")
