@@ -1,3 +1,4 @@
+import copy
 import io
 import string
 import re
@@ -65,7 +66,7 @@ def load_extra_wordlists(wordLength,bannedCharacters):
     global WholeWordList
 
     #if "hard mode" is active, I'm pretty sure they're looking to play wordle.
-    load_dict("Wordlists/wordle_complete.txt",WholeWordList)
+    #load_dict("Wordlists/wordle_complete.txt",WholeWordList)
     WholeWordList = optimize_wordlist(WholeWordList,wordLength,bannedCharacters)
 
     print("Whole word list assembled.")
@@ -558,6 +559,19 @@ def suggestWord(wordList:list[str], numberOfLetters:int = 6, wholeWordList:list[
                 print("Try \""+wordList[rnd]+"\"?")
             return [wordList[rnd]]
 
+def FindWordsWithOnlyLetters(wantedLetters, wordList) -> list:
+    """Returns words from list wordList made completely of letters from list wantedLetters"""
+    countLettersHit = [0]*len(wordList)
+    for i in range(len(wordList)):
+        countLettersHit[i] = len(set(wantedLetters) & set(wordList[i])) #turns out this unfairly weights words that have duplicate letters. I don't care!
+    #find the remaining word with the most most-common letters and suggest that
+    maxHitWords = [i for i, j in enumerate(countLettersHit) if j == len(wordList[i])] #this is a list of indexes in wordList where the count equals the length of the word
+
+    l_Output = []
+    for i in range(len(maxHitWords)):
+        l_Output.append(wordList[maxHitWords[i]])
+    return l_Output
+
 def GetWordleResponse(s_Input, s_Answer) -> str:
     """Returns a list of ".","G", and "Y" for absent, Green, and Yellow, respectively, to simulate what wordle would respond with"""
     s_Correct = "G"
@@ -611,13 +625,12 @@ def GetWordleResponse(s_Input, s_Answer) -> str:
         s_Output += l_Evaluation[i]
     return s_Output
 
-def FindOptimalPlay(l_WordList, b_HardMode = True, l_WholeWordList = [], b_Noisy = True) -> list:
+def GetGuessScores(l_WordList, l_WholeWordList = [], l_UselessCharacters = []) -> list:
     """A rather expensive function. runs in ~ O(n*m) time, depending on the length of the lists put in.
     BUT: should give the best possible wordle play, or pretty close to it!
     l_WordList is a list of all the answers
     b_HardMode tells the function if hardmode is active
     l_WholeWordList lists all playable words, is only used if b_HardMode is True"""
-    i_MaxOutput = 50 #this is the most words this function will return
     #Find all the words in WholeWordList that could help (have unknown letters and/or unknown positions in a position to test), or use WordList if hardmode is on
     #of that list, find the word that gives the best outcome on average, no matter the response
         #find all possible responses (grey, yellows, greens) given the wordlist
@@ -629,22 +642,21 @@ def FindOptimalPlay(l_WordList, b_HardMode = True, l_WholeWordList = [], b_Noisy
         #I feel like unless it's SUPER close, or one actually decimates all the competition, average gives a better idea.
     l_PossiblePlays = []
     l_PossiblePlays.extend(l_WordList) #Have to do it like this or it modifies the answerlist for SOME REASON?! Point is: I want the answers to be first if they work
-    if not b_HardMode:
-        if b_Noisy:
-            l_PossiblePlays.extend(l_WholeWordList)
-            #if we're looking at whole debug stuff, we probably want the best no matter what.
-        else:
-            l_PossiblePlays.extend(reduce_Wordlist(l_WholeWordList, [], mostCommonLetters(1, 1, len(l_WordList), l_WordList, None, None, None, False), str("")))
-            #often this would cause lockups that lasted almost a minute. By trimming down the list we search by requiring it have the most popular letter, we can still get great results in 1/4 the time.
-            #however, if the answers are possible solutions, we want them on there first. Only relevant if they're providing perfect scores, but it happens enough.
+    if len(l_UselessCharacters) > 0:
+        l_BannedWords = FindWordsWithOnlyLetters(l_UselessCharacters,l_WholeWordList)
+        l_PossiblePlays.extend([word for word in l_WholeWordList if word not in l_BannedWords]) #add all words that aren't useless
+    else:
+        l_PossiblePlays.extend(l_WholeWordList)
+    #however, if the answers are possible solutions, we want them on there first. Only relevant if they're providing perfect scores, but it happens enough.
     #dedupe the list if answer list is contained in the whole list (as it most certainly is):
     l_PossiblePlays = list(dict.fromkeys(l_PossiblePlays))
 
+    l_ScoreList = [[0 for x in range(3)] for y in range(len(l_PossiblePlays))]
+        
+    for i in range(len(l_PossiblePlays)):
+        l_ScoreList[i][0] = l_PossiblePlays[i]
+        #to access: [i][0] is the word, [i][1] is the average score, [i][2] is the maximum
 
-
-    l_AverageScore = [0] * len(l_PossiblePlays)
-    l_MaxScore = [0] * len(l_PossiblePlays) #if the average ties with something else, we'll use this to slim the list a bit more.
-    PerfectScoreCount = 0 #in some scenarios, there's dozens of words that give a perfect score. It's not worth it to provide more than ~5?
     for i in range(len(l_PossiblePlays)):
         l_PossibleOutcomes = [[0 for x in range(len(l_PossiblePlays))] for y in range(2)]
         i_PossOutIndex = 0
@@ -669,67 +681,190 @@ def FindOptimalPlay(l_WordList, b_HardMode = True, l_WholeWordList = [], b_Noisy
             else:
                 break
         if i_divisor > 0:
-            l_AverageScore[i] = i_sum / i_divisor #thankfully in python 3 this gives a float
-            if l_AverageScore[i] == 1:
-                PerfectScoreCount += 1
-                if PerfectScoreCount >= i_MaxOutput:
-                    if b_Noisy:
-                        print("Cutting list short. Many Perfect Solutions found.")
-                    l_MaxScore[i] = max(l_PossibleOutcomes[1]) #make sure to do this before it breaks out, just in case.
-                    l_AverageScore = l_AverageScore[:i+1] #trim the array
-                    l_MaxScore = l_MaxScore[:i+1] #Trim the Max Score array, too (was causing errors elsewhere)
-                    break
-        l_MaxScore[i] = max(l_PossibleOutcomes[1])
+            l_ScoreList[i][1] = i_sum / i_divisor #thankfully in python 3 this gives a float
+        l_ScoreList[i][2] = max(l_PossibleOutcomes[1])
     
-    if b_Noisy:
-        i_MinimumMaxScore = min(l_MaxScore)
-        #i_MinimumMaxScore = min(i for i in l_MaxScore if i>0) #Want to only get outcomes that result in words, so score must be > 0. Turns out this was caused by stopping word generation, and only trimming one of the arrays
-        l_IndexesOfScore = [i for i, j in enumerate(l_MaxScore) if j == i_MinimumMaxScore]
-        print("The minimum of the maximum words left overall is "+str(i_MinimumMaxScore))
-        f_averageAverageScore = 0
-        l_Output = []
-        f_MinimumAverage = 9999
-        l_MinAverageList = []
-        for i in range(len(l_IndexesOfScore)):
-            l_Output.append(l_PossiblePlays[l_IndexesOfScore[i]])
-            if (l_AverageScore[l_IndexesOfScore[i]]) < f_MinimumAverage:
-                l_MinAverageList = []
-                f_MinimumAverage = l_AverageScore[l_IndexesOfScore[i]]
-                l_MinAverageList.append(l_PossiblePlays[l_IndexesOfScore[i]])
-            elif (l_AverageScore[l_IndexesOfScore[i]]) == f_MinimumAverage:
-                l_MinAverageList.append(l_PossiblePlays[l_IndexesOfScore[i]])
-            f_averageAverageScore += l_AverageScore[l_IndexesOfScore[i]]
-        f_averageAverageScore = f_averageAverageScore/len(l_IndexesOfScore)
-        print("With an average of "+"{:.3f}".format(f_averageAverageScore)+" words left.")
-        print("For the words:          "+str(l_Output))
-        print("But a minimum average of "+"{:.3f}".format(f_MinimumAverage)+" words left")
-        print("For the words:          "+str(l_MinAverageList))
+    #now that I have the scores, I want to trim the useless values
+    i_WorstAcceptableAverage = len(l_WordList) - 0.5 #must on average remove at least 1 word, 50% of the time
+    i_WorstAcceptableMax = len(l_WordList) - 1 #come on, man. You gotta always remove ONE word from the pool.
 
+    l_ScoreList = sorted(l_ScoreList, key=lambda x: x[2], reverse=False) #sort by max, reverse false because we want the worst scores at the end
+
+    #delete all values greater than the acceptable score
+    for i in range(len(l_ScoreList)-1,-1,-1): #iterate backwards so the index doesn't change on me
+        if l_ScoreList[i][2] > i_WorstAcceptableMax:
+            del l_ScoreList[i]
+        else:
+            break #once we hit a less-than value, we know there's no more as the list is sorted.
+
+    l_ScoreList = sorted(l_ScoreList, key=lambda x: x[1], reverse=False) #sort by average score
+
+    #delete all values greater than the acceptable score
+    for i in range(len(l_ScoreList)-1,-1,-1): #iterate backwards so the index doesn't change on me
+        if l_ScoreList[i][1] > i_WorstAcceptableAverage:
+            del l_ScoreList[i]
+        else:
+            break #once we hit a less-than value, we know there's no more as the list is sorted.
     
-    
-    #scores calculated. find the minimum value
-    f_minScore = min(l_AverageScore)
-    if b_Noisy:
-        print("On average, SuperSearch will result in "+"{:.3f}".format(f_minScore)+" words left.")
-    i_IndexesOfScore = [i for i, j in enumerate(l_AverageScore) if j == f_minScore]
-    if len(i_IndexesOfScore) == 1:
-        if b_Noisy:
-            print("With a the maximum being "+str(l_MaxScore[i_IndexesOfScore[0]]))
-        return [l_PossiblePlays[i_IndexesOfScore[0]]]
+    return l_ScoreList
+
+def FindOptimalQuordlePlay() -> list:
+    global l_ULAnswers
+    global l_URAnswers
+    global l_LLAnswers
+    global l_LRAnswers #U/L = Upper/Lower, L/R = Left/Right
+
+    global l_ULGreyCharacters
+    global l_URGreyCharacters
+    global l_LLGreyCharacters
+    global l_LRGreyCharacters
+
+    global WholeWordList
+
+    #Make a list of letters none of the words benefit from
+    #l_FullBanCharacters = set(l_ULGreyCharacters) & set(l_URGreyCharacters) & set(l_LLGreyCharacters) & set(l_LRGreyCharacters)
+    #nvm, this wouldn't do much. Gonna remove them on a word-by-word basis
+
+
+    #step 1: get all the scores for all the guesses
+    l_CombinedScores = []
+    i_ExpectedDupes = 4
+
+    l_ULScores = None
+    if len(l_ULAnswers)>1:
+        l_ULScores = GetGuessScores(l_ULAnswers, WholeWordList, l_ULGreyCharacters)
+        DeepExtend(l_CombinedScores, l_ULScores)
     else:
-        i_MinimumMaxScore = 999999
-        i_indexOfMinMax = 0
-        l_OutputWords = []
-        for i in range(len(i_IndexesOfScore)):
-            if l_MaxScore[i_IndexesOfScore[i]] < i_MinimumMaxScore:
-                i_MinimumMaxScore = l_MaxScore[i_IndexesOfScore[i]]
-                i_indexOfMinMax = i_IndexesOfScore[i]
-                l_OutputWords = [l_PossiblePlays[i_IndexesOfScore[i]]]
-            elif l_MaxScore[i_IndexesOfScore[i]] == i_MinimumMaxScore:
-                l_OutputWords.append(l_PossiblePlays[i_IndexesOfScore[i]])
-        if b_Noisy:
-            print("With a the maximum being "+str(i_MinimumMaxScore))
-        return l_OutputWords #This used to only hold extra choices, but now it holds all of them. Just streamlines the code.
+        i_ExpectedDupes -= 1
+    l_URScores = None
+    if len(l_URAnswers)>1:
+        l_URScores = GetGuessScores(l_URAnswers, WholeWordList, l_URGreyCharacters)
+        DeepExtend(l_CombinedScores, l_URScores)
+    else:
+        i_ExpectedDupes -= 1
+    l_LLScores = None
+    if len(l_LLAnswers)>1:
+        l_LLScores = GetGuessScores(l_LLAnswers, WholeWordList, l_LLGreyCharacters)
+        DeepExtend(l_CombinedScores, l_LLScores)
+    else:
+        i_ExpectedDupes -= 1
+    l_LRScores = None
+    if len(l_LRAnswers)>1:
+        l_LRScores = GetGuessScores(l_LRAnswers, WholeWordList, l_LRGreyCharacters)
+        DeepExtend(l_CombinedScores, l_LRScores)
+    else:
+        i_ExpectedDupes -= 1
+
+    #step 2: calculate average score for each, noting if there's a perfect solution available.
+    
+    i_Length = len(l_CombinedScores)
+    i_PunishmentValue = AverageValNot1(len(l_ULAnswers),len(l_URAnswers),len(l_LLAnswers),len(l_LRAnswers))
+    i=0
+    while(i<i_Length): #for i in range(i_Length): #this would cause issues when getting to the very end and continuing because the range was already decided.
+        i_SUM_avrg = WeightValue(l_CombinedScores[i][1])
+        i_SUM_Max = l_CombinedScores[i][2]
+        for k in range(1,i_ExpectedDupes):
+            try:
+                index = CombinedScoresFindDupeIndex(l_CombinedScores,i)
+                i_SUM_avrg += WeightValue(l_CombinedScores[index][1])
+                i_SUM_Max += l_CombinedScores[index][2]
+                del l_CombinedScores[index] #destroy it. it's worthless now.
+                i_Length -= 1 #compensate the length so we don't run off the edge
+                
+            except:
+                i_SUM_avrg += i_PunishmentValue
+                i_SUM_Max += i_PunishmentValue
+        av_average = i_SUM_avrg #/i_ExpectedDupes
+        av_Max = i_SUM_Max #/i_ExpectedDupes #I'm thinking I don't want the average, as each list is a different scale, so total words left should be the strat
+        l_CombinedScores[i][1] = av_average
+        l_CombinedScores[i][2] = av_Max
+        i+=1
+    #values averaged
+    l_CombinedScores = sorted(l_CombinedScores, key=lambda x: x[1], reverse=False) #sort by average score
+
+    print("SuperSearch Top results:")
+    i_ResultsToPrint = 5
+    if len(l_CombinedScores) < i_ResultsToPrint:
+        i_ResultsToPrint = len(l_CombinedScores)
+    for i in range(i_ResultsToPrint):
+        OutputOptimalPlayString(l_CombinedScores[i],l_ULScores,l_URScores,l_LLScores,l_LRScores)
+
+
+    return l_CombinedScores[0:15]
+
+def CombinedScoresFindDupeIndex(l_CombinedScores:list, i_Index) -> int:
+    s_Word = l_CombinedScores[i_Index][0]
+    for i in range(i_Index+1, len(l_CombinedScores)):
+        if l_CombinedScores[i][0] == s_Word:
+            return i
+    raise LookupError(str(s_Word)+" Not found.")
+
+def CombinedScoresFindIndex(l_CombinedScores:list, s_Word) -> int:
+    for i in range(len(l_CombinedScores)):
+        if l_CombinedScores[i][0] == s_Word:
+            return i
+    raise LookupError(str(s_Word)+" Not found.")
+
+def OutputOptimalPlayString(l_Input:list,l_ULScores = None,l_URScores = None,l_LLScores = None,l_LRScores = None) -> None:
+    print("\""+l_Input[0]+"\" would give an average of "+str(l_Input[1])+" words left, but up to "+str(l_Input[2])+" words left.")
+    if l_ULScores is not None:
+        try:
+            index = CombinedScoresFindIndex(l_ULScores,l_Input[0])
+            print("     It gives a score of "+str(l_ULScores[index][1])+" for the Upper-Left.")
+        except:
+            pass
+    if l_URScores is not None:
+        try:
+            index = CombinedScoresFindIndex(l_URScores, l_Input[0])
+            print("     It gives a score of "+str(l_URScores[index][1])+" for the Upper-Right.")
+        except:
+            pass
+    if l_LLScores is not None:
+        try:
+            index = CombinedScoresFindIndex(l_LLScores, l_Input[0])
+            print("     It gives a score of "+str(l_LLScores[index][1])+" for the Lower-Left.")
+        except:
+            pass
+    if l_LRScores is not None:
+        try:
+            index = CombinedScoresFindIndex(l_LRScores, l_Input[0])
+            print("     It gives a score of "+str(l_LRScores[index][1])+" for the Lower-Right.")
+        except:
+            pass
+    
+def DeepExtend(l_OrigList:list, l_Extension:list) -> list:
+    #for i in range(len(l_Extension)):
+    tempCopy = copy.deepcopy(l_Extension)
+    l_OrigList.extend(tempCopy)
+    return l_OrigList
+
+def AverageValNot1(Item1:int, Item2:int = 1, Item3:int = 1, Item4:int = 1):
+    i_Sum = 0
+    i_Divisor = 0
+    if Item1 != 1:
+        i_Sum += Item1
+        i_Divisor += 1
+    if Item2 != 1:
+        i_Sum += Item2
+        i_Divisor += 1
+    if Item3 != 1:
+        i_Sum += Item3
+        i_Divisor += 1
+    if Item4 != 1:
+        i_Sum += Item4
+        i_Divisor += 1
+    return i_Sum/i_Divisor
+
+
+
+def WeightValue(Value):
+    if Value == 1:
+        return -2 #perfect knowlege answers are heavily weighted
+    elif Value < 2:
+        return Value - 1 #close to perfect knowlege is good
+    else:
+        return Value
+
 
 
 
@@ -740,10 +875,10 @@ def FindOptimalPlay(l_WordList, b_HardMode = True, l_WholeWordList = [], b_Noisy
 
 
 #program
-#print("NOTE: for every yes/no question, blank responses are \"no\", and any response is considered \"yes\"")
-#b_SuperSearch = bool(input("Enable SuperSearch (Very slow, but the best possible outcome)? "))
-#if not b_SuperSearch:
-#    b_SuperSearchConfirmed = False
+print("NOTE: for every yes/no question, blank responses are \"no\", and any response is considered \"yes\"")
+b_SuperSearch = bool(input("Enable SuperSearch (Very slow, but the best possible outcome)? "))
+if not b_SuperSearch:
+    b_SuperSearchConfirmed = False
 build_dictionary(wordLen,bannedChars)
 
 WholeWordList += PossibleAnswers
@@ -801,9 +936,9 @@ while (len(l_ULAnswers) > 1) or (len(l_URAnswers) > 1) or (len(l_LLAnswers) > 1)
 
     suggestWord(l_AllAnswers, wordLen+1, WholeWordList, l_AllKnownLetters, True)
 
-    #if b_SuperSearch & (not b_FirstRun):
-    #    OptimalWord = FindOptimalPlay(PossibleAnswers,b_HardMode,WholeWordList)
-    #    print("SuperSearch Suggestion: "+str(OptimalWord))
+    if b_SuperSearch & (not b_FirstRun):
+        OptimalWord = FindOptimalQuordlePlay()
+        print("SuperSearch Suggestion: "+str(OptimalWord))
     InterrogateUserForInfo_and_FilterWordlist()
     b_FirstRun = False
 try:
