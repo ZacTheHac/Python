@@ -22,11 +22,6 @@ l_URUnknownPositions = []
 l_LLUnknownPositions = []
 l_LRUnknownPositions = []
 
-s_ULKnownPositions = ""
-s_URKnownPositions = ""
-s_LLKnownPositions = ""
-s_LRKnownPositions = ""
-
 l_ULGreyCharacters = []
 l_URGreyCharacters = []
 l_LLGreyCharacters = []
@@ -66,7 +61,7 @@ def load_extra_wordlists(wordLength,bannedCharacters):
     global WholeWordList
 
     #if "hard mode" is active, I'm pretty sure they're looking to play wordle.
-    #load_dict("Wordlists/wordle_complete.txt",WholeWordList)
+    load_dict("Wordlists/wordle_complete.txt",WholeWordList)
     WholeWordList = optimize_wordlist(WholeWordList,wordLength,bannedCharacters)
 
     print("Whole word list assembled.")
@@ -877,12 +872,14 @@ def WeightValue(Value):
 #program
 print("NOTE: for every yes/no question, blank responses are \"no\", and any response is considered \"yes\"")
 b_SuperSearch = bool(input("Enable SuperSearch (Very slow, but the best possible outcome)? "))
+b_AllWords = bool(input("Load whole wordlist (Makes SS take 6.5x longer, but may yield SLIGHTLY better results)?"))
 if not b_SuperSearch:
     b_SuperSearchConfirmed = False
 build_dictionary(wordLen,bannedChars)
 
 WholeWordList += PossibleAnswers
-load_extra_wordlists(wordLen,bannedChars)
+if b_AllWords:
+    load_extra_wordlists(wordLen,bannedChars)
 
 #lists loaded. Fill the lists.
 l_ULAnswers.extend(PossibleAnswers)
