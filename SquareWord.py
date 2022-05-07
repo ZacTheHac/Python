@@ -210,6 +210,10 @@ def IUI_a_FWL_Breakout(s_WordAttempt:str, l_Answers:list, l_UnknownPositions:lis
             l_TempGreyLetters[i] = ""
         else:
             l_TempGreyLettersFiltered.append(l_TempGreyLetters[i])
+    for i in range(len(l_TempGreenLetters)):
+        if l_TempGreenLetters[i] not in l_TempYellowLetters: #squareword tells us if there's more by putting it in yellow still.
+            print("Looks like there's no more \""+l_TempGreenLetters[i]+"\"s in the word.")
+            l_FoundAll.append(l_TempGreenLetters[i])
     #for those we know that we have all positions, filter all other positions with that letter
     if(len(l_FoundAll) != 0):
         s_foundAll = ""
@@ -538,7 +542,7 @@ def UncertaintyCube(l_HorizontalAnswers:list, l_VerticalAnswers:list) -> None:
         print(str_Counts)
 
 def ReducePossibleWords(l_HorizontalAnswers:list, l_VerticalAnswers:list):
-    print("Searching for possible words...")
+    #print("Searching for possible words...")
     DirtyBit = True
     while DirtyBit:
         DirtyBit = False
@@ -563,8 +567,10 @@ def ReducePossibleWords(l_HorizontalAnswers:list, l_VerticalAnswers:list):
                     DirtyBit = True
                     l_VerticalAnswers[C].clear()
                     DeepExtend(l_VerticalAnswers[C],newVerticalWordlist)
-        if DirtyBit:
-            print("Comflicts Found. Resolving...")
+        #if DirtyBit:
+        #    print("Comflicts Found. Resolving...")
+        #else:
+        #    print("No further conflicts found.")
 
 
 
@@ -584,7 +590,7 @@ for i in range(wordLen):
 
 b_FirstRun = True
 while(len(l_HorizontalAnswers[0]) > 1) or (len(l_HorizontalAnswers[1]) > 1) or (len(l_HorizontalAnswers[2]) > 1) or (len(l_HorizontalAnswers[3]) > 1) or (len(l_HorizontalAnswers[4]) > 1):
-    print("\n\n\n")
+    print("\n")
     print("Remaining words:")
     for i in range(len(l_HorizontalAnswers)):
         if len(l_HorizontalAnswers[i]) > 1:
@@ -616,6 +622,7 @@ while(len(l_HorizontalAnswers[0]) > 1) or (len(l_HorizontalAnswers[1]) > 1) or (
     InterrogateUserForInfo_and_FilterWordlist()
     ReducePossibleWords(l_HorizontalAnswers,l_VerticalAnswers)
 
+    print("\n")
     print("Possible Letters at all locations:")
     UncertaintyCube(l_HorizontalAnswers,l_VerticalAnswers)
 
