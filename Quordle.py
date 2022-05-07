@@ -310,40 +310,40 @@ def InterrogateUserForInfo_and_FilterWordlist() -> None:
             print("Upper left:")
             if IUI_a_FWL_Breakout(s_WordAttempt,l_ULAnswers,l_ULUnknownPositions,l_ULGreyCharacters) == True:
                 if len(l_ULAnswers) == 1:
-                    print("Upper Left is \""+str(l_ULAnswers[0])+"\"")
+                    print("**Upper Left is \""+str(l_ULAnswers[0])+"\"")
                 break
         else:
-            print("Upper left is \""+str(l_ULAnswers[0])+"\"")
+            print("**Upper left is \""+str(l_ULAnswers[0])+"\"")
             break
     while True:
         if len(l_URAnswers) > 1:
             print("Upper right:")
             if IUI_a_FWL_Breakout(s_WordAttempt,l_URAnswers,l_URUnknownPositions,l_URGreyCharacters) == True:
                 if len(l_URAnswers) == 1:
-                    print("Upper Right is \""+str(l_URAnswers[0])+"\"")
+                    print("**Upper Right is \""+str(l_URAnswers[0])+"\"")
                 break
         else:
-            print("Upper right is \""+str(l_URAnswers[0])+"\"")
+            print("**Upper right is \""+str(l_URAnswers[0])+"\"")
             break
     while True:
         if len(l_LLAnswers) > 1:
             print("Lower left:")
             if IUI_a_FWL_Breakout(s_WordAttempt,l_LLAnswers,l_LLUnknownPositions,l_LLGreyCharacters) == True:
                 if len(l_LLAnswers) == 1:
-                    print("Lower Left is \""+str(l_LLAnswers[0])+"\"")
+                    print("**Lower Left is \""+str(l_LLAnswers[0])+"\"")
                 break
         else:
-            print("Lower left is \""+str(l_LLAnswers[0])+"\"")
+            print("**Lower left is \""+str(l_LLAnswers[0])+"\"")
             break
     while True:
         if len(l_LRAnswers) > 1:
             print("Lower right:")
             if IUI_a_FWL_Breakout(s_WordAttempt,l_LRAnswers,l_LRUnknownPositions,l_LRGreyCharacters) == True:
                 if len(l_LRAnswers) == 1:
-                    print("Lower Right is \""+str(l_LRAnswers[0])+"\"")
+                    print("**Lower Right is \""+str(l_LRAnswers[0])+"\"")
                 break
         else:
-            print("Lower right is \""+str(l_LRAnswers[0])+"\"")
+            print("**Lower right is \""+str(l_LRAnswers[0])+"\"")
             break
 
 
@@ -778,11 +778,15 @@ def FindOptimalQuordlePlay() -> list:
     l_CombinedScores = sorted(l_CombinedScores, key=lambda x: x[1], reverse=False) #sort by average score
 
     print("SuperSearch Top results:")
-    i_ResultsToPrint = 5
-    if len(l_CombinedScores) < i_ResultsToPrint:
-        i_ResultsToPrint = len(l_CombinedScores)
-    for i in range(i_ResultsToPrint):
-        OutputOptimalPlayString(l_CombinedScores[i],l_ULScores,l_URScores,l_LLScores,l_LRScores)
+    i_MaxResultsToPrint = 15
+    if len(l_CombinedScores) < i_MaxResultsToPrint:
+        i_MaxResultsToPrint = len(l_CombinedScores)
+    f_TopScore = l_CombinedScores[0][1]
+    for i in range(i_MaxResultsToPrint):
+        if l_CombinedScores[i][1] <= (f_TopScore + 1):
+            OutputOptimalPlayString(l_CombinedScores[i],l_ULScores,l_URScores,l_LLScores,l_LRScores)
+        else:
+            return
 
 
     return l_CombinedScores[0:15]
@@ -801,29 +805,63 @@ def CombinedScoresFindIndex(l_CombinedScores:list, s_Word) -> int:
     raise LookupError(str(s_Word)+" Not found.")
 
 def OutputOptimalPlayString(l_Input:list,l_ULScores = None,l_URScores = None,l_LLScores = None,l_LRScores = None) -> None:
-    print("\""+l_Input[0]+"\" would give an average of "+str(l_Input[1])+" words left, but up to "+str(l_Input[2])+" words left.")
+    i_MaxWordWidth = 18
+    i_ListsInPlay = 0
+    if l_ULScores is not None:
+        i_ListsInPlay += 1
+        #i_MaxWordWidth = 17
+    if l_URScores is not None:
+        #i_MaxWordWidth = max(i_MaxWordWidth, 18)
+        i_ListsInPlay += 1
+    if l_LLScores is not None:
+        #i_MaxWordWidth = max(i_MaxWordWidth, 17)
+        i_ListsInPlay += 1
+    if l_LRScores is not None:
+        #i_MaxWordWidth = max(i_MaxWordWidth, 18)
+        i_ListsInPlay += 1
+
+    if l_Input[1] <= (WeightValue(1)*i_ListsInPlay):
+        print("\""+l_Input[0]+"\" gives perfect information.")
+        return #no reason to continue if it's 100% perfect
+    elif l_Input[1] <= 0:
+        print("\""+l_Input[0]+"\" gives near perfect information with a score of "+"{:.3f}".format(l_Input[1])+", but up to "+str(l_Input[2])+" words left.")
+    else:
+        print("\""+l_Input[0]+"\" gives a score of "+"{:.3f}".format(l_Input[1])+", but up to "+str(l_Input[2])+" words left.")
+    
     if l_ULScores is not None:
         try:
             index = CombinedScoresFindIndex(l_ULScores,l_Input[0])
-            print("     It gives a score of "+str(l_ULScores[index][1])+" for the Upper-Left.")
+            if l_ULScores[index][1] == 1.0:
+                print("   **It gives Perfect information for the Upper-Left!")
+            else:
+                print("     Upper-Left: ".ljust(i_MaxWordWidth," ")+"{:.1f}".format(l_ULScores[index][1])+" words left on average, with a max of "+str(l_ULScores[index][2]))
         except:
             pass
     if l_URScores is not None:
         try:
             index = CombinedScoresFindIndex(l_URScores, l_Input[0])
-            print("     It gives a score of "+str(l_URScores[index][1])+" for the Upper-Right.")
+            if l_URScores[index][1] == 1.0:
+                print("   **It gives Perfect information for the Upper-Right!")
+            else:
+                print("     Upper-Right: ".ljust(i_MaxWordWidth," ")+"{:.1f}".format(l_URScores[index][1])+" words left on average, with a max of "+str(l_URScores[index][2]))
         except:
             pass
     if l_LLScores is not None:
         try:
             index = CombinedScoresFindIndex(l_LLScores, l_Input[0])
-            print("     It gives a score of "+str(l_LLScores[index][1])+" for the Lower-Left.")
+            if l_LLScores[index][1] == 1.0:
+                print("   **It gives Perfect information for the Lower-Left!")
+            else:
+                print("     Lower-Left: ".ljust(i_MaxWordWidth," ")+"{:.1f}".format(l_LLScores[index][1])+" words left on average, with a max of "+str(l_LLScores[index][2]))
         except:
             pass
     if l_LRScores is not None:
         try:
             index = CombinedScoresFindIndex(l_LRScores, l_Input[0])
-            print("     It gives a score of "+str(l_LRScores[index][1])+" for the Lower-Right.")
+            if l_LRScores[index][1] == 1.0:
+                print("   **It gives Perfect information for the Lower-Right!")
+            else:
+                print("     Lower-Right: ".ljust(i_MaxWordWidth," ")+"{:.1f}".format(l_LRScores[index][1])+" words left on average, with a max of "+str(l_LRScores[index][2]))
         except:
             pass
     
@@ -850,15 +888,27 @@ def AverageValNot1(Item1:int, Item2:int = 1, Item3:int = 1, Item4:int = 1):
         i_Divisor += 1
     return i_Sum/i_Divisor
 
-
-
 def WeightValue(Value):
     if Value == 1:
         return -2 #perfect knowlege answers are heavily weighted
     elif Value < 2:
-        return Value - 1 #close to perfect knowlege is good
+        return Value - 0.5 #close to perfect knowlege is good
     else:
         return Value
+
+def PrintWordsRemaining(s_Name:str, l_wordlist:list[str]) -> None:
+    i_Strwidth = 13
+    i_length = len(l_wordlist)
+    if i_length == 1:
+        print("**"+s_Name+" is \""+str(l_wordlist[0])+"\"")
+    elif i_length < 10:
+        print(str(s_Name+": ").ljust(i_Strwidth," ")+str(i_length)+" words remaining:")
+        print(str(l_wordlist))
+    else:
+        print(str(s_Name+": ").ljust(i_Strwidth," ")+str(i_length)+" words remaining.")
+
+        
+
 
 
 
@@ -889,29 +939,12 @@ l_LRAnswers.extend(PossibleAnswers)
 
 b_FirstRun = True
 while (len(l_ULAnswers) > 1) or (len(l_URAnswers) > 1) or (len(l_LLAnswers) > 1) or (len(l_LRAnswers) > 1):
-    print("\n\n\n")
-    print("Upper Left: "+str(len(l_ULAnswers))+" words remaining.")
-    print("Upper Right: "+str(len(l_URAnswers))+" words remaining.")
-    print("Lower Left: "+str(len(l_LLAnswers))+" words remaining.")
-    print("Lower Right: "+str(len(l_LRAnswers))+" words remaining.")
+    print("\n\n")
+    PrintWordsRemaining("Upper Left", l_ULAnswers)
+    PrintWordsRemaining("Upper Right", l_URAnswers)
+    PrintWordsRemaining("Lower Left", l_LLAnswers)
+    PrintWordsRemaining("Lower Right", l_LRAnswers)
     if (len(l_ULAnswers)<=15) and (len(l_URAnswers)<=15) and (len(l_LLAnswers)<=15) and (len(l_LRAnswers)<=15):
-        print("Remaining words:")
-        print("Upper Left:")
-        for word in l_ULAnswers:
-            print(word)
-        print("--END OF WORDS--")
-        print("Upper Right:")
-        for word in l_URAnswers:
-            print(word)
-        print("--END OF WORDS--")
-        print("Lower Left:")
-        for word in l_LLAnswers:
-            print(word)
-        print("--END OF WORDS--")
-        print("Lower Right:")
-        for word in l_LRAnswers:
-            print(word)
-        print("--END OF WORDS--")
         if not b_SuperSearchConfirmed:
             b_SuperSearch = bool(input("Do you want to enable SuperSearch now? "))
             b_SuperSearchConfirmed = True
@@ -935,10 +968,15 @@ while (len(l_ULAnswers) > 1) or (len(l_URAnswers) > 1) or (len(l_LLAnswers) > 1)
 
     if b_SuperSearch & (not b_FirstRun):
         OptimalWord = FindOptimalQuordlePlay()
-        print("SuperSearch Suggestion: "+str(OptimalWord))
+        #print("SuperSearch Suggestion: "+str(OptimalWord))
     InterrogateUserForInfo_and_FilterWordlist()
     b_FirstRun = False
 try:
-    print("Done!") #normally I'd print out the answer here, but that's already done.
+    print("\n\n")
+    PrintWordsRemaining("Upper Left", l_ULAnswers)
+    PrintWordsRemaining("Upper Right", l_URAnswers)
+    PrintWordsRemaining("Lower Left", l_LLAnswers)
+    PrintWordsRemaining("Lower Right", l_LRAnswers)
+    print("Done!")
 except IndexError:
     print("Something went wrong. I can't find the solutions.")
