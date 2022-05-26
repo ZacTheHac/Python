@@ -1,16 +1,14 @@
 import copy
 import io
-import string
 import re
-import statistics
-import math
-import random
-from xmlrpc.client import boolean
 
 #hardcoded variables
 bannedChars = ["'","Å","â","ä","á","å","ç","é","è","ê","í","ñ","ó","ô","ö","ü","û","-"," "]
 wordLen = 5
 NumberOfWords = 3
+#Deluxe Waffle settings
+#wordLen = 7
+#NumberOfWords = 4
 
 
 #global variables
@@ -35,7 +33,7 @@ def build_dictionary(wordLength,bannedCharacters):
     global l_AllWords
 
     #Load YAWL by Mendel Leo Cooper
-    load_dict("Wordlists/YAWL_5_letter_only.txt",l_AllWords)
+    load_dict("Wordlists/YAWL.txt",l_AllWords)
 
     l_AllWords = optimize_wordlist(l_AllWords,wordLength,bannedCharacters)
 
@@ -68,232 +66,6 @@ def reduce_Wordlist(l_WordList, l_bannedChars = [], l_WantedLetters = [], s_Rege
                     newWords.append(word)
     return newWords
 
-def genStats(l_WordList, l_WordStats = None, l_LetterStats = None, noisy = False) -> None:
-    """Pulls words from l_WordList and outputs how common certain letters are in l_LetterStats (Including duplicate letters), and l_WordStats (one instance counted per word)
-    Setting either output list as None skips that calculation.
-    noisy will output extra info to the console."""
-    #note: to replace lists, you have to modify them directly. assigning them breaks the initial link, so you don't modify the original
-
-    if l_LetterStats != None:
-        totalChars=0
-        #clear array
-        for i in range(len(l_LetterStats)):
-            l_LetterStats[i] = 0
-        for word in l_WordList:
-            for char in word:
-                try:
-                    ind = string.ascii_letters.index(char)
-                    l_LetterStats[ind] += 1
-                    totalChars += 1
-                except ValueError:
-                    print("Non-ascii character found: "+char)
-        if noisy:
-            maxCount = max(l_LetterStats)
-            #find all instances of that count
-            maxLetters = [i for i, j in enumerate(l_LetterStats) if j == maxCount]
-            #normalize the indexes into characters
-            for i in range(len(maxLetters)):
-                maxLetters[i] = chr(maxLetters[i]+97)
-            if len(maxLetters) > 1:
-                letters = ""
-                for letter in maxLetters:
-                    letters += letter
-                    letters += ", "
-                print("Most common letters are: "+letters+"with "+str(maxCount)+" occurrences each.")
-            else:
-                print("Most common letter is: "+str(maxLetters[0])+" with "+str(maxCount)+" occurrences.")
-
-            minCount = min(l_LetterStats)
-            minLetters = [i for i, j in enumerate(l_LetterStats) if j == minCount]
-            for i in range(len(minLetters)):
-                minLetters[i] = chr(minLetters[i]+97)
-            if len(minLetters) > 1:
-                letters = ""
-                for letter in minLetters:
-                    letters += letter
-                    letters += ", "
-                print("The least common letters are: "+letters+"with only "+str(minCount)+" occurances each.")
-            else:
-                print("The least common letter is: "+str(minLetters[0])+" with only "+str(minCount)+" occurances.")
-
-
-            print("Total characters counted: "+str(totalChars))
-
-    #more useful counts: only count one instance per word
-    if l_WordStats != None:
-        charsSeen = []
-        for i in range(len(l_WordStats)):
-            l_WordStats[i] = 0
-        for word in l_WordList:
-            for char in word:
-                try:
-                    if char not in charsSeen:
-                        charsSeen.append(char)
-                        ind = string.ascii_letters.index(char)
-                        l_WordStats[ind] += 1
-                except ValueError:
-                    print("Non-ascii character found: "+char)
-            charsSeen = []
-        if noisy:
-            maxCount = max(l_WordStats)
-            #find all instances of that count
-            maxLetters = [i for i, j in enumerate(l_WordStats) if j == maxCount]
-            #normalize the indexes into characters
-            for i in range(len(maxLetters)):
-                maxLetters[i] = chr(maxLetters[i]+97)
-
-            if len(maxLetters) > 1:
-                letters = ""
-                for letter in maxLetters:
-                    letters += letter
-                    letters += ", "
-                print("Most common letters are: "+letters+" in "+str(maxCount)+" words each.")
-            else:
-                print("Most common letter is: "+str(maxLetters[0])+" in "+str(maxCount)+" words.")
-
-            minCount = min(l_WordStats)
-            minLetters = [i for i, j in enumerate(l_WordStats) if j == minCount]
-            for i in range(len(minLetters)):
-                minLetters[i] = chr(minLetters[i]+97)
-            if len(minLetters) > 1:
-                letters = ""
-                for letter in minLetters:
-                    letters += letter
-                    letters += ", "
-                print("The least common letters are: "+letters+"in only "+str(minCount)+" words each.")
-            else:
-                print("The least common letter is: "+str(minLetters[0])+" in only "+str(minCount)+" words.")
-
-def IUI_a_FWL_Breakout(s_WordAttempt:str, l_Answers:list, l_UnknownPositions:list, l_GreyCharacters:list, s_Result:str, s_Yellows:str ) -> bool:
-
-    if len(s_Result) < len(s_WordAttempt):
-        print("You're that lazy? Going to assume the rest are grey.")
-        s_Result = s_Result.ljust(len(s_WordAttempt),".")
-    elif len(s_Result) > len(s_WordAttempt):
-        print("That response is too long. I'm going to assume that was erroneous.")
-        return False
-    l_InputYellows = []
-    for char in s_Yellows:
-        l_InputYellows.append(char)
-    
-    s_FilterString = ""
-    l_TempGreenLetters = []
-    l_TempYellowLetters = []
-    l_TempGreyLetters = []
-    l_TempGreyLettersFiltered = []
-    for i in range(len(s_Result)):
-        if s_Result[i].isalpha():
-            #green letter: best outcome
-            l_TempGreenLetters.append(s_Result[i])
-            s_FilterString += s_Result[i]
-        else:
-            #could be actual grey, could just be a yellow.
-            if s_WordAttempt[i] in l_InputYellows:
-                l_TempYellowLetters.append(s_WordAttempt[i])
-                del l_InputYellows[l_InputYellows.index(s_WordAttempt[i])] #remove it so it's not double-counted later.
-                s_FilterString += "[^"+s_WordAttempt[i]+"]"
-            else:
-                l_TempGreyLetters.append(s_WordAttempt[i])
-                s_FilterString += "[^"+s_WordAttempt[i]+"]"
-    l_TempYellowLetters.extend(l_InputYellows)
-    #check for double letters while filling out bannedChars
-    l_FoundAll = []
-    for i in range(len(l_TempGreyLetters)):
-        if l_TempGreyLetters[i] in l_TempYellowLetters: #we have to check for yellow first or it'll fullban the letter despite not knowing the position. (see: eerie y.g.g for scree)
-            print("Looks like there's no more \""+l_TempGreyLetters[i]+"\"s in the word.")
-            #We don't know where it goes, so fullban isn't possible, and we already added it to filter string. so just remove the entry
-            l_TempGreyLetters[i] = ""
-        elif l_TempGreyLetters[i] in l_TempGreenLetters:
-            print("Looks like there's no more \""+l_TempGreyLetters[i]+"\"s in the word.")
-            l_FoundAll.append(l_TempGreyLetters[i])
-            l_TempGreyLetters[i] = ""
-        else:
-            l_TempGreyLettersFiltered.append(l_TempGreyLetters[i])
-    for i in range(len(l_TempGreenLetters)):
-        if l_TempGreenLetters[i] not in l_TempYellowLetters: #squareword tells us if there's more by putting it in yellow still.
-            print("Looks like there's no more \""+l_TempGreenLetters[i]+"\"s in the word.")
-            l_FoundAll.append(l_TempGreenLetters[i])
-    #for those we know that we have all positions, filter all other positions with that letter
-    if(len(l_FoundAll) != 0):
-        s_foundAll = ""
-        for char in l_FoundAll:
-            s_foundAll += char
-        i_strLen = len(s_FilterString)
-        i=0
-        while i < i_strLen:
-            indexOf = s_FilterString.find("[^",i)
-            if indexOf != -1:
-                indexOf += 2 #to make sure it goes after the filter character
-                s_FilterString = str_Insert(s_FilterString,indexOf,s_foundAll)
-                #refresh the values
-                i_strLen = len(s_FilterString)
-                i = indexOf + len(l_FoundAll)
-            else:
-                #no more in the word
-                i=i_strLen
-    #additional filters done
-
-    #check if the input is possible
-    if len(reduce_Wordlist(l_Answers, l_TempGreyLettersFiltered, l_TempYellowLetters, s_FilterString)) < 1:
-        print("Check that input again. There's no words left if that's the case.")
-        return False
-
-    #make sure the green letters are in unknownPositions so they can pad double letters
-    for char in l_TempGreenLetters:
-        if char not in l_UnknownPositions:
-            l_UnknownPositions.append(char)
-        else:
-            i_neededCount = (l_TempYellowLetters.count(char) + l_TempGreenLetters.count(char)) - l_UnknownPositions.count(char)
-            #if unknownPositions.count(char) < (l_YellowLetters.count(char) + l_GreenLetters.count(char)):
-            for i in range(i_neededCount):
-                l_UnknownPositions.append(char)
-    #Finally, put the yellow letters into unknownPositions, being careful to only double up on confirmed double letters
-    for char in l_TempYellowLetters:
-        if char not in l_UnknownPositions:
-            l_UnknownPositions.append(char)
-        else:
-            i_neededCount = max(((l_TempYellowLetters.count(char) + l_TempGreenLetters.count(char)) - l_UnknownPositions.count(char)),0)
-            #if unknownPositions.count(char) < (l_YellowLetters.count(char) + l_GreenLetters.count(char)):
-            for i in range(i_neededCount):
-                l_UnknownPositions.append(char)
-    
-    l_GreyCharacters.extend(l_TempGreyLettersFiltered)
-
-    l_TempAnswers = reduce_Wordlist(l_Answers, l_GreyCharacters, l_UnknownPositions, s_FilterString)
-    l_Answers.clear()
-    l_Answers.extend(l_TempAnswers)
-    return True
-
-def InterrogateUserForInfo_and_FilterWordlist() -> None:
-    global l_HorizontalAnswers
-    global l_VerticalAnswers
-    global l_KnownLetters
-    global l_KnownBadLetters
-    global wordLen
-
-    while True:
-        s_WordAttempt = input("Enter the word you tried: ").lower()
-        if (len(s_WordAttempt) != wordLen):
-            print("That word isn't the length we're looking for. I'm going to assume that was erroneous.")
-        else:
-            break
-    for i in range(len(l_HorizontalAnswers)):
-        if len(l_HorizontalAnswers[i]) > 1:
-            while True:
-                print("Row "+str(i+1)+":")
-                s_Result = input("What does the row look like now? [. for grey]: ").lower()
-                s_Yellows = input("What yellows do you have now? ").lower()
-                if IUI_a_FWL_Breakout(s_WordAttempt,l_HorizontalAnswers[i],l_KnownLetters[i],l_KnownBadLetters[i],s_Result,s_Yellows) == True:
-                    if len(l_HorizontalAnswers[i]) == 1:
-                        print("Row "+str(i+1)+" is \""+str(l_HorizontalAnswers[i][0])+"\"")
-                    break
-        else:
-            print("Row "+str(i+1)+" is \""+str(l_HorizontalAnswers[i][0])+"\"")
-
-def str_Insert(s_Original, i_index, s_Insert) -> str:
-    """Returns a string with s_Insert placed at i_index"""
-    return s_Original[:i_index]+s_Insert+s_Original[i_index:]
-
 def StrContainsAllLettersWithCount(s_Word, l_Letters) -> bool:
     #quick check to skip the hard part if I don't need to.
     #Turns out this check is slower in most cases
@@ -309,267 +81,11 @@ def StrContainsAllLettersWithCount(s_Word, l_Letters) -> bool:
     #if it got this far, it's a pass
     return True
 
-def mostCommonLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordList:list[str] = None, l_LetterCounts:list[int] = None, l_2DLetterList:list = None, l_IgnoredLetters:list[str] = None, noisy:bool = True) -> list:
-    """Returns the most common letters in the wordlist. \n
-    i_MaxLetters = maximum number of letters to return (will return fewer if fewer exist)\n
-    i_MinCount = The Lowest number of hits that this function will return, inclusive. \n
-    i_MaxCount = the highest number of hits the letter can have to be returned, exclusive. Useful for ignoring letters that are in every word.\n
-        l_WordList = the wordlist to operate on. Can provide this or: \n
-        l_LetterCounts = a list of how common letters are, with the index of the list referring to their ASCII offset from 97 (a) or finally:\n
-        l_2DLetterList = an array of 2 arrays that contains the character in [i][0], and its count in [i][1] \n
-            Set values to None if they're unused\n"""
-
-    l_CombinedList = [[0 for x in range(2)] for y in range(26)]
-
-    if l_2DLetterList is None:
-        #have to make the list myself
-        if l_LetterCounts is None:
-            #calculate with genstats and build
-            l_LetterCounts = [0] * 26
-            genStats(l_WordList,l_LetterCounts)
-        
-        for i in range(26):
-            l_CombinedList[i][0] = chr(i+97)
-            l_CombinedList[i][1] = l_LetterCounts[i]
-            #to access: [i][0] is the letter, [i][1] is the count
-    else:
-        l_CombinedList = l_2DLetterList
-        
-
-    #sort the list via the counts, in reverse order because I like the largest values on the left
-    l_CombinedList = sorted(l_CombinedList, key=lambda x: x[1], reverse=True)
-
-    if i_MinCount != None:
-        #make a list of values that are all greater than or equal to the minimum count
-        for i in range(len(l_CombinedList)-1,-1,-1): #iterate backwards so the index doesn't change on me
-            if l_CombinedList[i][1] < i_MinCount:
-                del l_CombinedList[i]
-            else:
-                break #once we hit a non-zero value, we know there's no more zeros as the list is sorted.
-
-    if i_MaxCount != None:
-        for i in range(len(l_CombinedList)):
-            if l_CombinedList[0][1] >= i_MaxCount:
-                del l_CombinedList[0]
-            else:
-                break #all the top words are gonna be at the front of the list. if one is below that length, we know there are no more.
-            #technically, there could be more known letters after the check fails once, but realistically, if we're not filtering, we probably just want the top unknown result.
-
-    if l_IgnoredLetters != None:
-        for i in range(len(l_CombinedList)-1,-1,-1): #iterate backwards so the index doesn't change on me
-            if l_CombinedList[i][0] in l_IgnoredLetters:
-                del l_CombinedList[i]
-
-    #at this point, all zero counts and max counts (assuming filterMaxCounts is set) are removed. The list is also sorted.
-    #just need to trim it to final size
-    if len(l_CombinedList)>i_MaxLetters:
-        l_CombinedList = l_CombinedList[0:i_MaxLetters]
-
-    if noisy & (len(l_CombinedList)>0):
-        print(str(len(l_CombinedList))+" most common letters:")
-        printLetters(None,None,None,None,l_CombinedList)
-
-    sortedTopLetters = []
-    for i in range(len(l_CombinedList)):
-        sortedTopLetters.append(l_CombinedList[i][0])
-    return sortedTopLetters
-
-def printLetters(l_WordList:list[str], i_MinCount:int = 1, i_MaxCount:int = None, l_LetterCounts:list[int] = None, l_2DLetterList:list = None) -> None:
-    """
-    i_MinCount = The Lowest number of hits that this function will return, inclusive. \n
-    i_MaxCount = the highest number of hits the letter can have to be returned, exclusive. Useful for ignoring letters that are in every word.\n
-    Provide one of the following:\n
-        l_WordList = the wordlist to operate on. Can provide this \n
-        l_LetterCounts = a list of how common letters are, with the index of the list referring to their ASCII offset from 97(a)\n
-        l_2DLetterList = an array of 2 arrays that contains the character in [i][0], and its count in [i][1] \n
-    Set values to None if they're unused\n"""
-
-    l_CombinedList = [[0 for x in range(2)] for y in range(26)]
-
-    if l_2DLetterList is None:
-        #have to make the list myself
-        if l_LetterCounts is None:
-            #calculate with genstats and build
-            l_LetterCounts = [0] * 26
-            genStats(l_WordList,l_LetterCounts)
-        
-        for i in range(26):
-            l_CombinedList[i][0] = chr(i+97)
-            l_CombinedList[i][1] = l_LetterCounts[i]
-            #to access: [i][0] is the letter, [i][1] is the count
-    else:
-        l_CombinedList = l_2DLetterList
-
-    #sort the list via the counts, in reverse order because I like the largest values on the left
-    l_CombinedList = sorted(l_CombinedList, key=lambda x: x[1], reverse=True)
-
-    if i_MinCount != None:
-        #make a list of values that are all nonzero
-        for i in range(len(l_CombinedList)-1,-1,-1): #iterate backwards so the index doesn't change on me
-            if l_CombinedList[i][1] < i_MinCount:
-                del l_CombinedList[i]
-            else:
-                break #once we hit a non-zero value, we know there's no more zeros as the list is sorted.
-    if i_MaxCount != None:
-        for i in range(len(l_CombinedList)):
-            if l_CombinedList[0][1] >= i_MaxCount:
-                del l_CombinedList[0]
-            else:
-                break #all the top words are gonna be at the front of the list. if one is below that length, we know there are no more.
-    #at this point, all zero counts and max counts (assuming filterMaxCounts is set) are removed. The list is also sorted.
-
-    if len(l_CombinedList)>0:
-        i_width = len(str(l_CombinedList[0][1])) #the longest number is this many chars wide
-        str_Letters = "| "
-        str_Counts = "| "
-        for i in range(len(l_CombinedList)):
-            str_Counts += str(l_CombinedList[i][1]).center(i_width," ")+" | "
-            str_Letters += str(l_CombinedList[i][0]).center(i_width," ")+" | "
-        print(str_Letters)
-        print(str_Counts)
-
-def suggestWord(wordList:list[str], numberOfLetters:int = 6, l_KnownLetters:list[str] =[], WholeWordList:list = [], noisy = True) -> list:
-    """Prints words from list wordList that contain the most number of letters returned by mostCommonLetters()\n\n
-    wordList is a list of valid words to pick from\n
-    numberOfLetters is how many letters to get from mostCommonLetters() to try to cram into the word\n
-    wantedLetters lets you specify the letters you wish to use instead of pulling from mostCommonLetters(), send a blank list if unwanted\n
-    noisy being True will print out the wording to the console. Either way the suggested word will be returned\n
-    returnList will return a list if successful at finding words and there was more than one response
-
-    return: a list of suggested word(s) or suggested character to try next. if there was an error finding an appropriate suggestion, it will spit out a random word from wordlist.
-    """
-    mcLetters = mostCommonLetters(numberOfLetters, 1, len(wordList), wordList, None, None, l_KnownLetters, noisy)
-        
-    if noisy:
-        printLetters(wordList, 1, len(wordList))
-        #midLetters = medianLetters(numberOfLetters, 1, None, wordList, None, None, l_KnownLetters, noisy)
-        #lcLetters = leastCommonLetters(numberOfLetters, 1, None, wordList, None, None, l_KnownLetters, noisy)            
-
-    if len(mcLetters) < 1:
-        rnd = random.randrange(0,len(wordList),1)
-        if noisy:
-            print("I've got no guidance. Try \""+wordList[rnd]+"\"?")
-        return [str(wordList[rnd])]
-    else:
-        l_searchableWords = []
-        DeepExtend(l_searchableWords,wordList)
-        if len(wordList) < 5:
-            l_searchableWords.extend(WholeWordList)
-        #dedupe the list
-        l_searchableWords = list(dict.fromkeys(l_searchableWords))
-        
-        countMostCommonHit = [0]*len(l_searchableWords)
-
-        for i in range(len(l_searchableWords)):
-            #for every legal word, we're gonna count the amount of letters that hit
-            lettersInWord = []
-            for char in l_searchableWords[i]:
-                if char not in lettersInWord:
-                    lettersInWord.append(char)
-            countMostCommonHit[i] = len(set(mcLetters) & set(lettersInWord)) #this takes a little longer, but should stop reccomendations of vastly different value being suggested.
-        #find the remaining word with the most most-common letters and suggest that
-        maxMCHit = max(countMostCommonHit)
-        maxHitWords = [i for i, j in enumerate(countMostCommonHit) if j == maxMCHit] #this is a list of indexes in wordList where the max hit words reside
-        if len(maxHitWords) > 1:
-            startIndex = 0
-            if noisy and len(maxHitWords) > 20:
-                startIndex = 20
-            rnd = random.randrange(startIndex,len(maxHitWords),1)
-            if noisy:
-                print("A few suggestions:")
-                for i in range(min(len(maxHitWords),20)):
-                    print(l_searchableWords[maxHitWords[i]])
-                print("Might I suggest trying \""+l_searchableWords[maxHitWords[rnd]]+"\"?")
-            
-            listToReturn = []
-            for i in range(len(maxHitWords)):
-                listToReturn.append(l_searchableWords[maxHitWords[i]])
-            return listToReturn
-        elif len(maxHitWords) == 1:
-            if noisy:
-                print("Might I suggest trying \""+l_searchableWords[maxHitWords[0]]+"\"?")
-            return [l_searchableWords[maxHitWords[0]]]
-        else:
-            rnd = random.randrange(0,len(l_searchableWords),1)
-            if noisy:
-                print("Something severely broke when trying to suggest a word.") #the list shouldn't ever be empty. Only thing I can think of is if all letters are known, so mcLetters is empty, so all counts are 0
-                #so I'll use the ol standby:
-                print("Try \""+l_searchableWords[rnd]+"\"?")
-            return [l_searchableWords[rnd]]
-
 def DeepExtend(l_OrigList:list, l_Extension:list) -> list:
     #for i in range(len(l_Extension)):
     tempCopy = copy.deepcopy(l_Extension)
     l_OrigList.extend(tempCopy)
     return l_OrigList
-
-def PossibleLettersAt(i_Column:int, i_Row:int, l_HorizontalAnswers, l_VerticalAnswers) -> list:
-    l_HorizontalWords = l_HorizontalAnswers[i_Row]
-    l_VerticalWords = l_VerticalAnswers[i_Column]
-
-    l_HorizontalWordLetters = []
-    l_VerticalWordLetters = []
-    for i in range(len(l_HorizontalWords)):
-        char = l_HorizontalWords[i][i_Column]
-        if char not in l_HorizontalWordLetters:
-            l_HorizontalWordLetters.append(char)
-    for i in range(len(l_VerticalWords)):
-        char = l_VerticalWords[i][i_Row]
-        if char not in l_VerticalWordLetters:
-            l_VerticalWordLetters.append(char)
-    l_Crossover = list(set(l_HorizontalWordLetters) & set(l_VerticalWordLetters))
-    return l_Crossover
-
-def UncertaintyCube(l_HorizontalAnswers:list, l_VerticalAnswers:list) -> None:
-    i_MaxNum = 0
-    l_UncertCube = [[0 for x in range(len(l_VerticalAnswers))] for y in range(len(l_HorizontalAnswers))]
-    for R in range(len(l_HorizontalAnswers)):
-        for C in range(len(l_VerticalAnswers)):
-            l_UncertCube[C][R] = PossibleLettersAt(C,R,l_HorizontalAnswers,l_VerticalAnswers)
-            if len(l_UncertCube[C][R]) > i_MaxNum:
-                i_MaxNum = len(l_UncertCube[C][R])
-        
-    i_width = len(str(i_MaxNum)) #the longest number is this many chars wide
-    for R in range(len(l_HorizontalAnswers)):
-        str_Counts = "| "
-        for C in range(len(l_VerticalAnswers)):
-            i_Count = len(l_UncertCube[C][R])
-            if i_Count == 1:
-                str_Counts += str(l_UncertCube[C][R][0]).center(i_width," ")+" | "
-            else:
-                str_Counts += str(i_Count).center(i_width," ")+" | "
-        print(str_Counts)
-
-def ReducePossibleWords(l_HorizontalAnswers:list, l_VerticalAnswers:list):
-    #print("Searching for possible words...")
-    DirtyBit = True
-    while DirtyBit:
-        DirtyBit = False
-        for C in range(len(l_VerticalAnswers)):
-            s_vertRegex = ""
-            for R in range(len(l_HorizontalAnswers)):
-                l_Letters = PossibleLettersAt(C,R,l_HorizontalAnswers,l_VerticalAnswers)
-                s_LetterRegex = "["
-                for char in l_Letters:
-                    s_LetterRegex += char
-                s_LetterRegex += "]"
-                s_regexBase = "."*(len(l_HorizontalAnswers)-1)
-                s_horrizRegex = str_Insert(s_regexBase, C, s_LetterRegex)
-                s_vertRegex += s_LetterRegex
-                newHorrizontalWordlist = reduce_Wordlist(l_HorizontalAnswers[R], [], [], s_horrizRegex)
-                if not newHorrizontalWordlist == l_HorizontalAnswers[R]:
-                    DirtyBit = True
-                    l_HorizontalAnswers[R].clear()
-                    DeepExtend(l_HorizontalAnswers[R],newHorrizontalWordlist)
-            newVerticalWordlist = reduce_Wordlist(l_VerticalAnswers[C], [], [], s_vertRegex)
-            if not newVerticalWordlist == l_VerticalAnswers[C]:
-                    DirtyBit = True
-                    l_VerticalAnswers[C].clear()
-                    DeepExtend(l_VerticalAnswers[C],newVerticalWordlist)
-        #if DirtyBit:
-        #    print("Comflicts Found. Resolving...")
-        #else:
-        #    print("No further conflicts found.")
 
 def AreWeDoneYet(l_HorizontalWords, l_VerticalWords) -> bool:
     for i in range(len(l_HorizontalWords)):
@@ -612,7 +128,7 @@ def DisplayWaffle(l_HorizKnownLetters,l_VertKnownLetters) -> None:
                     sOutput += "   "
         print(sOutput)
 
-def LetterIndextoCoords(Index:int,iWordLen:int,iNumOfWords:int) -> list:
+def LetterIndextoWordCoords(Index:int,iWordLen:int,iNumOfWords:int) -> list:
     """Takes an integer for the index in the storage string a letter is, and converts that to a list with the Vertical and Horizontal word and index it represents"""
     l_ReturnList = [[None,None],[None,None]] #1st is horizontal [word, index], 2nd is vertical [word,index]
     #00 = [[0,0][0,0]]
@@ -665,6 +181,44 @@ def LetterIndextoCoords(Index:int,iWordLen:int,iNumOfWords:int) -> list:
         VertWord = iSuperIndex - iWordLen
 
     l_ReturnList = [[HorizWord,HorizIndex],[VertWord,VertIndex]]
+    return l_ReturnList
+
+def LetterIndextoGeneralCoords(Index:int,iWordLen:int,iNumOfWords:int) -> list:
+    """Takes an integer for the index in the storage string a letter is, and converts that to the coordinates it represents"""
+    l_ReturnList = [None,None]
+    #00 = [0,0]
+    #01 = [1,0]
+    #02 = [2,0]
+    #03 = [3,0]
+    #04 = [4,0]
+    #05 = [0,1]
+    #06 = [2,1]
+    #07 = [4,1]
+    #08 = [0,2]
+    #20 = [4,4]
+    #0, 6
+
+    iSetLength = iWordLen+iNumOfWords
+    #set index = which block of 8 are we in
+    iSetIndex = Index // iSetLength
+    #Super Index = which part of the block of 8 are we in
+    iSuperIndex = Index - (iSetIndex*iSetLength)
+
+    if Index >= ((iSetLength * (iNumOfWords-1))+iWordLen):
+        return l_ReturnList #the index isn't valid at all
+    elif Index < 0:
+        return l_ReturnList
+    x = None
+    y = None
+    if iSuperIndex < iWordLen:
+        #we're in the first part, where it counts up normally
+        x = iSuperIndex
+        y = iSetIndex * 2
+    else:
+        #second part, x counts by 2s
+        x = (iSuperIndex-iWordLen)*2
+        y = (iSetIndex * 2)+1
+    l_ReturnList = [x,y]
     return l_ReturnList
 
 def CoordsToWordIndex(X:int,Y:int,iWordLen:int,iNumofWords:int) -> list:
@@ -721,6 +275,7 @@ def CoordsToStringIndex(X:int,Y:int,iWordLen:int,iNumofWords:int) -> int:
     return iIndex
 
 def SetLetters(sLetters:str,sColors:str,lHorizLetters:list,lVertLetters:list,lUnhomed:list):
+    lFDsFound = []
     lUnhomed.clear()
     if not len(sLetters) == len(sColors):
         raise ValueError("Letters and Colors must be the same length.")
@@ -728,15 +283,90 @@ def SetLetters(sLetters:str,sColors:str,lHorizLetters:list,lVertLetters:list,lUn
     iNumOfWords = len(lHorizLetters)
     for i in range(len(sColors)):
         if sColors[i] == "g":
-            l_LetterIndexes = LetterIndextoCoords(i,iWordLen,iNumOfWords)
+            l_LetterIndexes = LetterIndextoWordCoords(i,iWordLen,iNumOfWords)
             if l_LetterIndexes[0][0] != None:
                 lHorizLetters[l_LetterIndexes[0][0]][l_LetterIndexes[0][1]] = sLetters[i]
             if l_LetterIndexes[1][0] != None:
                 lVertLetters[l_LetterIndexes[1][0]][l_LetterIndexes[1][1]] = sLetters[i]
         elif sColors[i] == "y":
+            currChar = sLetters[i]
+            #check for "funky dingo" situations!
+            lCoords = LetterIndextoWordCoords(i,iWordLen,iNumOfWords)
+            lCrossroads = [] #fill with arrays holding the [x,y] of every crossroads in this word
+            if lCoords[0][0] != None: #horizontal word
+                y = lCoords[0][0] * 2
+                for x in range(iWordLen):
+                    if isCrossroad(x,y):
+                        lCrossroads.append([x,y])
+            if lCoords[1][0] != None: #vertical word
+                x = lCoords[1][0] * 2
+                for y in range(iWordLen):
+                    if isCrossroad(x,y):
+                        lCrossroads.append([x,y])
+            #now: if the letter appears in both the vertical and horizontal, and both are yellow, we MIGHT have a funky dingo, and one of those letters should be added to "unhomed"
+            #HOWEVER: if the letter appears in both, but only one is yellow, it CANNOT be at that crossroads. Maybe reduce the words here or let the actual reducer figure that out.
+            #if the letter only appears on one side: we can't be sure. It's not a funky dingo, but the letter can be in that spot. No harm, no foul. Nothing to do or say, really.
+            for j in range(len(lCrossroads)):
+                currentCoords = lCrossroads[j]
+                if [currentCoords[0],currentCoords[1],currChar] not in lFDsFound:
+                    if len(PossibleFunkyDingos(sLetters,sColors,iWordLen,iNumOfWords,currentCoords[0],currentCoords[1],currChar))>0:
+                        lUnhomed.append(currChar) #there's a possible funkydingo, so we might have an extra one of these letters around.
+                        lFDsFound.append([currentCoords[0],currentCoords[1],currChar])
+                        break #once we find one, we don't need to keep trying.
             pass
         else:
             lUnhomed.append(sLetters[i])
+
+def PossibleFunkyDingos(sLetters,sColors,iWordLen, iNumOfWords, xCoord, yCoord, FindChar = None) -> list:
+    """Takes in the current board state, takes an index in the boardstate to work on, and an optional character to exclusively search for.\n
+    Will then return a list of all possible funkyDingo situations for that crossroads"""
+    #now: if the letter appears in both the vertical and horizontal, and both are yellow, we MIGHT have a funky dingo, and one of those letters should be added to "unhomed"
+    #HOWEVER: if the letter appears in both, but only one is yellow, it CANNOT be at that crossroads. Maybe reduce the words here or let the actual reducer figure that out.
+    #if the letter only appears on one side: we can't be sure. It's not a funky dingo, but the letter can be in that spot. No harm, no foul. Nothing to do or say, really.
+    wordCoords = CoordsToWordIndex(xCoord,yCoord,iWordLen,iNumOfWords)
+    if wordCoords[0][0] == None or wordCoords[1][0] == None:
+        return [] #it's not even a crossroads, obviously not.
+    elif sColors[CoordsToStringIndex(xCoord,yCoord,iWordLen,iNumOfWords)] == "g":
+        return [] #it can't be a funkydingo because the crossroad is set...
+    elif FindChar != None and sLetters[CoordsToStringIndex(xCoord,yCoord,iWordLen,iNumOfWords)] == FindChar:
+        return [] #if it's not green, but the crossroads IS the letter we're concerned about, then we know it can't be that letter, so no FD.
+    
+    verticalYelChars = []
+    HorizontalYelChars = []
+    VerticalHasChar = False
+    HorizontalHasChar = False
+    for x in range(iWordLen):
+        strIndex = CoordsToStringIndex(x,yCoord,iWordLen,iNumOfWords)
+        if sColors[strIndex] == "y" and x != xCoord:
+            if FindChar == None:
+                HorizontalYelChars.append(sLetters[strIndex])
+            elif sLetters[strIndex] == FindChar:
+                HorizontalHasChar = True
+                break
+    for y in range(iWordLen):
+        strIndex = CoordsToStringIndex(xCoord,y,iWordLen,iNumOfWords)
+        if sColors[strIndex] == "y" and y != yCoord:
+            if FindChar == None:
+                verticalYelChars.append(sLetters[strIndex])
+            elif sLetters[strIndex] == FindChar:
+                VerticalHasChar = True
+                break
+    if VerticalHasChar and HorizontalHasChar:
+        #POSSIBLE FUNKY DINGO!
+        return [FindChar]
+    elif FindChar == None:
+        lOverlap = list(set(HorizontalYelChars) & set(verticalYelChars))
+        if len(lOverlap) > 0:
+            #Possible FunkyDingo(s)!
+            return lOverlap
+    return [] #if it gets here without returning, it's not possible.
+
+def isCrossroad(x:int,y:int) -> bool:
+    if x % 2 == 0 and y % 2 == 0:
+        #both are even, and thus are crossroads.
+        return True
+    else:
+        return False
 
 def PossibleLettersAtLocation(X:int,Y:int,sLetters:str,sColors:str,lHorizLetters:list,lVertLetters:list,lHorizAnswers:list,lVertAnswers:list,lUnHomed:list):
     #if the letter is set in Hor/VertLetters, just return that
@@ -766,10 +396,10 @@ def PossibleLettersAtLocation(X:int,Y:int,sLetters:str,sColors:str,lHorizLetters
             iLetterIndex = CoordsToStringIndex(i,Y,iWordLen,iNumOfWords)
             if sColors[iLetterIndex] == "y":
                 lAllowedLetters.append(sLetters[iLetterIndex])
-                if not i == X:
-                    if sLetters[iLetterIndex] in lNotAllowed:
-                        #Probably in here by mistake, remove it from notallowed
-                        del lNotAllowed[lNotAllowed.index(sLetters[iLetterIndex])]
+                #if not i == X:
+                #    if sLetters[iLetterIndex] in lNotAllowed:
+                #        #Probably in here by mistake, remove it from notallowed
+                #        del lNotAllowed[lNotAllowed.index(sLetters[iLetterIndex])]
             elif not sColors[iLetterIndex] == "g": #if it's not yellow or green it's a white
                 if not sLetters[iLetterIndex] in lAllowedLetters:
                     lNotAllowed.append(sLetters[iLetterIndex])
@@ -779,10 +409,10 @@ def PossibleLettersAtLocation(X:int,Y:int,sLetters:str,sColors:str,lHorizLetters
             iLetterIndex = CoordsToStringIndex(X,i,iWordLen,iNumOfWords)
             if sColors[iLetterIndex] == "y":
                 lAllowedLetters.append(sLetters[iLetterIndex])
-                if not i == Y:
-                    if sLetters[iLetterIndex] in lNotAllowed:
-                        #Probably in here by mistake, remove it from notallowed
-                        del lNotAllowed[lNotAllowed.index(sLetters[iLetterIndex])]
+                #if not i == Y:
+                #    if sLetters[iLetterIndex] in lNotAllowed:
+                #        #Probably in here by mistake, remove it from notallowed
+                #        del lNotAllowed[lNotAllowed.index(sLetters[iLetterIndex])]
             elif not sColors[iLetterIndex] == "g": #if it's not yellow or green it's a white
                 if not sLetters[iLetterIndex] in lAllowedLetters: #could simply be the second occurance
                     lNotAllowed.append(sLetters[iLetterIndex])
@@ -878,7 +508,7 @@ def ReducePossibleWords(sLetters:str,sColors:str,lHorizLetters:list,lVertLetters
                             lVertLetters[lAffectedWords[1][0]][lAffectedWords[1][1]] = lPossibleLetters[0]
                 else:
                     print("ERROR!")
-                if x % 2 == 1: #odd x: 1,3: If it's yellow, it HAS to be in this word
+                if y % 2 == 1: #odd y: 1,3: If it's yellow, it HAS to be in this word
                     if sColors[CoordsToStringIndex(xCoord,y,iWordLen,iNumOfWords)] == "y":
                         lRequiredLetters.append(sLetters[CoordsToStringIndex(xCoord,y,iWordLen,iNumOfWords)])
             newWordlist = reduce_Wordlist(l_VerticalAnswers[AnswerListIndex], [], lRequiredLetters, sRegex)
@@ -888,6 +518,180 @@ def ReducePossibleWords(sLetters:str,sColors:str,lHorizLetters:list,lVertLetters
                     DeepExtend(l_VerticalAnswers[AnswerListIndex],newWordlist)
     #done reducing: do some cleanup:
     #write out all known letters:
+    SetKnownLetters(l_HorizontalAnswers,l_VerticalAnswers, lHorizLetters, lVertLetters)
+
+def BitListInc(BitList:list[int],MaxValues:list[int]) -> list:
+    """Increments Bitlist like a binary counter, but MaxValues holds the (noninclusive) maximum for each position"""
+    BitList[len(BitList)-1] += 1
+    for i in range(len(BitList)-1,0,-1):
+        if BitList[i] >= MaxValues[i]:
+            BitList[i] = 0
+            BitList[i-1] += 1
+    if BitList[0] >= MaxValues[0]:
+        #Overflow!
+        BitList[0] = 0
+        return None
+    return BitList
+
+def ReduceByPlaying_Extensible(sLetters:str,l_HorizontalAnswers:list,l_VerticalAnswers:list,lHorizLetters:list,lVertLetters:list):
+    """Will try to see what combinations are actually possible and removing the words that aren't"""
+    iWordLen = len(l_HorizontalAnswers[0][0])
+    iNumOfWords = len(l_HorizontalAnswers)
+    AllLetters = []
+    for i in range(len(sLetters)):
+        AllLetters.append(sLetters[i])
+    lHorizAnsReduced = [[] for i in range(len(l_HorizontalAnswers))]
+    lVertAnsReduced = [[] for i in range(len(l_VerticalAnswers))]
+    RI = [0]*iNumOfWords
+    CI = [0]*iNumOfWords
+    RIMax = []
+    for i in range(len(l_HorizontalAnswers)):
+        RIMax.append(len(l_HorizontalAnswers[i]))
+    CIMax = []
+    for i in range(len(l_VerticalAnswers)):
+        CIMax.append(len(l_VerticalAnswers[i]))
+
+    while RI != None:
+        tempFreeLetters = []
+        DeepExtend(tempFreeLetters,AllLetters)
+        try:
+            for i in range(len(RI)):
+                for char in l_HorizontalAnswers[i][RI[i]]:
+                    del tempFreeLetters[tempFreeLetters.index(char)]
+            for i in range(len(CI)):
+                for r in range(len(l_VerticalAnswers[i][CI[i]])):
+                                    if r % 2 == 1: 
+                                        char = l_VerticalAnswers[i][CI[i]][r]
+                                        del tempFreeLetters[tempFreeLetters.index(char)] #only delete the odd characters, as they're unaccounted for elsewhere
+                                    else:
+                                        lAffectedSections = CoordsToWordIndex(i*2,r,iWordLen,iNumOfWords)
+                                        WordCheck = RI[lAffectedSections[0][0]]
+                                        if l_VerticalAnswers[i][CI[i]][r] != l_HorizontalAnswers[lAffectedSections[0][0]][WordCheck][lAffectedSections[0][1]]:
+                                            raise ValueError("This play is not possible.")
+            #if we get here, that means this set of words is a valid play
+            for i in range(len(RI)):
+                lHorizAnsReduced[i].append(l_HorizontalAnswers[i][RI[i]])
+            for i in range(len(CI)):
+                lVertAnsReduced[i].append(l_VerticalAnswers[i][CI[i]])
+        except:
+            pass
+        #do the incrementing
+        CI = BitListInc(CI,CIMax)
+        if CI == None:
+            CI = [0]*iNumOfWords
+            RI = BitListInc(RI,RIMax)
+
+    #at this point, we know the valid plays
+    #dedupe the lists
+    for i in range(len(lHorizAnsReduced)):
+        lHorizAnsReduced[i] = list(set(lHorizAnsReduced[i]))
+        l_HorizontalAnswers[i].clear()
+        DeepExtend(l_HorizontalAnswers[i],lHorizAnsReduced[i])
+    for i in range(len(lVertAnsReduced)):
+        lVertAnsReduced[i] = list(set(lVertAnsReduced[i]))
+        l_VerticalAnswers[i].clear()
+        DeepExtend(l_VerticalAnswers[i],lVertAnsReduced[i])
+    SetKnownLetters(l_HorizontalAnswers,l_VerticalAnswers, lHorizLetters, lVertLetters)
+
+def ReduceByPlaying(sLetters:str,l_HorizontalAnswers:list,l_VerticalAnswers:list,lHorizLetters:list,lVertLetters:list):
+    """Will try to see what combinations are actually possible and removing the words that aren't"""
+    iWordLen = len(l_HorizontalAnswers[0][0])
+    iNumOfWords = len(l_HorizontalAnswers)
+    AllLetters = []
+    for i in range(len(sLetters)):
+        AllLetters.append(sLetters[i])
+    lHorizAnsReduced = [[] for i in range(len(l_HorizontalAnswers))]
+    lVertAnsReduced = [[] for i in range(len(l_VerticalAnswers))]
+    RI = [0]*iNumOfWords
+    CI = [0]*iNumOfWords
+    RIMax = []
+    for i in range(len(l_HorizontalAnswers)):
+        RIMax.append(len(l_HorizontalAnswers[i]))
+    CIMax = []
+    for i in range(len(l_VerticalAnswers)):
+        CIMax.append(len(l_VerticalAnswers[i]))
+    
+    for R0 in range(len(l_HorizontalAnswers[0])):
+        for R1 in range(len(l_HorizontalAnswers[1])):
+            for R2 in range(len(l_HorizontalAnswers[2])):
+                for C0 in range(len(l_VerticalAnswers[0])):
+                    for C1 in range(len(l_VerticalAnswers[1])):
+                        for C2 in range(len(l_VerticalAnswers[2])):
+                            tempFreeLetters = []
+                            DeepExtend(tempFreeLetters,AllLetters)
+                            try:
+                                for char in l_HorizontalAnswers[0][R0]:
+                                    del tempFreeLetters[tempFreeLetters.index(char)]
+                                for char in l_HorizontalAnswers[1][R1]:
+                                    del tempFreeLetters[tempFreeLetters.index(char)]
+                                for char in l_HorizontalAnswers[2][R2]:
+                                    del tempFreeLetters[tempFreeLetters.index(char)]
+                                for i in range(len(l_VerticalAnswers[0][C0])):
+                                    if i % 2 == 1: 
+                                        char = l_VerticalAnswers[0][C0][i]
+                                        del tempFreeLetters[tempFreeLetters.index(char)] #only delete the odd characters, as they're unaccounted for elsewhere
+                                    else:
+                                        lAffectedSections = CoordsToWordIndex(0,i,iWordLen,iNumOfWords)
+                                        if lAffectedSections[0][0] == 0:
+                                            WordCheck = R0
+                                        elif lAffectedSections[0][0] == 1:
+                                            WordCheck = R1
+                                        elif lAffectedSections[0][0] == 2:
+                                            WordCheck = R2
+                                        if l_VerticalAnswers[0][C0][i] != l_HorizontalAnswers[lAffectedSections[0][0]][WordCheck][lAffectedSections[0][1]]:
+                                            raise ValueError("This play is not possible.")
+                                for i in range(len(l_VerticalAnswers[1][C1])):
+                                    if i % 2 == 1: 
+                                        char = l_VerticalAnswers[1][C1][i]
+                                        del tempFreeLetters[tempFreeLetters.index(char)] #only delete the odd characters, as they're unaccounted for elsewhere
+                                    else:
+                                        lAffectedSections = CoordsToWordIndex(2,i,iWordLen,iNumOfWords)
+                                        if lAffectedSections[0][0] == 0:
+                                            WordCheck = R0
+                                        elif lAffectedSections[0][0] == 1:
+                                            WordCheck = R1
+                                        elif lAffectedSections[0][0] == 2:
+                                            WordCheck = R2
+                                        if l_VerticalAnswers[1][C1][i] != l_HorizontalAnswers[lAffectedSections[0][0]][WordCheck][lAffectedSections[0][1]]:
+                                            raise ValueError("This play is not possible.")
+                                for i in range(len(l_VerticalAnswers[2][C2])):
+                                    if i % 2 == 1: 
+                                        char = l_VerticalAnswers[2][C2][i]
+                                        del tempFreeLetters[tempFreeLetters.index(char)] #only delete the odd characters, as they're unaccounted for elsewhere
+                                    else:
+                                        lAffectedSections = CoordsToWordIndex(4,i,iWordLen,iNumOfWords)
+                                        if lAffectedSections[0][0] == 0:
+                                            WordCheck = R0
+                                        elif lAffectedSections[0][0] == 1:
+                                            WordCheck = R1
+                                        elif lAffectedSections[0][0] == 2:
+                                            WordCheck = R2
+                                        if l_VerticalAnswers[2][C2][i] != l_HorizontalAnswers[lAffectedSections[0][0]][WordCheck][lAffectedSections[0][1]]:
+                                            raise ValueError("This play is not possible.")
+                                #if we get here, that means this set of words is a valid play
+                                lHorizAnsReduced[0].append(l_HorizontalAnswers[0][R0])
+                                lHorizAnsReduced[1].append(l_HorizontalAnswers[1][R1])
+                                lHorizAnsReduced[2].append(l_HorizontalAnswers[2][R2])
+                                lVertAnsReduced[0].append(l_VerticalAnswers[0][C0])
+                                lVertAnsReduced[1].append(l_VerticalAnswers[1][C1])
+                                lVertAnsReduced[2].append(l_VerticalAnswers[2][C2])
+                            except:
+                                pass
+    #at this point, we know the valid plays
+    #dedupe the lists
+    for i in range(len(lHorizAnsReduced)):
+        lHorizAnsReduced[i] = list(set(lHorizAnsReduced[i]))
+        l_HorizontalAnswers[i].clear()
+        DeepExtend(l_HorizontalAnswers[i],lHorizAnsReduced[i])
+    for i in range(len(lVertAnsReduced)):
+        lVertAnsReduced[i] = list(set(lVertAnsReduced[i]))
+        l_VerticalAnswers[i].clear()
+        DeepExtend(l_VerticalAnswers[i],lVertAnsReduced[i])
+    SetKnownLetters(l_HorizontalAnswers,l_VerticalAnswers, lHorizLetters, lVertLetters)
+
+def SetKnownLetters(l_HorizontalAnswers, l_VerticalAnswers, lHorizLetters, lVertLetters):
+    iNumOfWords = len(l_HorizontalAnswers)
+    iWordLen = len(l_HorizontalAnswers[0][0])
     for WordListIndex in range(iNumOfWords):
         if len(l_HorizontalAnswers[WordListIndex]) == 1:
             y = WordListIndex * 2
@@ -902,9 +706,69 @@ def ReducePossibleWords(sLetters:str,sColors:str,lHorizLetters:list,lVertLetters
             for y in range(iWordLen):
                 lAffectedWords = CoordsToWordIndex(x,y,iWordLen,iNumOfWords)
                 if lAffectedWords[0][0] != None:
-                    lHorizLetters[lAffectedWords[0][0]][lAffectedWords[0][1]] = l_VerticalAnswers[WordListIndex][0][x]
+                    lHorizLetters[lAffectedWords[0][0]][lAffectedWords[0][1]] = l_VerticalAnswers[WordListIndex][0][y]
                 if lAffectedWords[1][0] != None:
-                    lVertLetters[lAffectedWords[1][0]][lAffectedWords[1][1]] = l_VerticalAnswers[WordListIndex][0][x]
+                    lVertLetters[lAffectedWords[1][0]][lAffectedWords[1][1]] = l_VerticalAnswers[WordListIndex][0][y]
+
+def SolutionAsString(l_HorizLetters,l_VertLetters) -> str:
+    sOutput = ""
+    iWordLen = len(l_HorizLetters[0])
+    iNumOfWords = len(l_HorizLetters)
+    for Row in range(iWordLen):
+        if Row % 2 == 0: #even row, full length
+            for i in range(len(l_HorizLetters[Row//2])):
+                sOutput += l_HorizLetters[Row//2][i]
+        else: #odd row, only vertical fills
+            for i in range(iNumOfWords):
+                sOutput += l_VertLetters[i][Row]
+    return sOutput
+
+def GetMinimumSwaps(sLetters,l_HorizAnswers,l_VertAnswers,l_HorizLetters,l_VertLetters) -> list:
+    iWordLen = len(l_HorizAnswers[0][0])
+    iNumOfWords = len(l_HorizAnswers)
+    sTarget = SolutionAsString(l_HorizLetters,l_VertLetters)
+    lScratch = []
+    for char in sLetters:
+        lScratch.append(char)
+    l_Steps = [] #will contain list of: [FromX, FromY, FromLetter, ToX, ToY, ToLetter]
+    notDone = True
+    while notDone:
+        notDone = False
+        for i in range(len(lScratch)):
+            if lScratch[i] != sTarget[i] and sTarget[i] != ".":
+                notDone = True
+                wantedChar = sTarget[i]
+                haveChar = lScratch[i]
+                l_Indexes = []
+                #get all possibilities
+                for j in range(len(lScratch)):
+                    if lScratch[j] == wantedChar and sTarget[j] != wantedChar: #this is an out of place character and it's a character we're looking for
+                        l_Indexes.append(j)
+                for k in range(len(l_Indexes)):
+                    indexOfWanted = l_Indexes[k]
+                    if sTarget[indexOfWanted] == haveChar: #obvious swap, they belong in each other's spot
+                        fromCoords = LetterIndextoGeneralCoords(indexOfWanted,iWordLen,iNumOfWords)
+                        toCoords = LetterIndextoGeneralCoords(i,iWordLen,iNumOfWords)
+                        l_Steps.append([fromCoords[0],fromCoords[1],wantedChar,toCoords[0],toCoords[1],haveChar])
+                        lScratch[i] = wantedChar
+                        lScratch[indexOfWanted] = haveChar
+                        break
+                    elif sTarget[indexOfWanted] == ".":
+                        #Swap is indeterminate, don't do it yet.
+                        notDone = False #in case this was the last one holding it back.
+                    elif len(l_Indexes) == 1 or (k == len(l_Indexes)-1):
+                        #kinda have to make this swap. it's the only possible option, or we've tried all the others.
+                        fromCoords = LetterIndextoGeneralCoords(indexOfWanted,iWordLen,iNumOfWords)
+                        toCoords = LetterIndextoGeneralCoords(i,iWordLen,iNumOfWords)
+                        l_Steps.append([fromCoords[0],fromCoords[1],wantedChar,toCoords[0],toCoords[1],haveChar])
+                        lScratch[i] = wantedChar
+                        lScratch[indexOfWanted] = haveChar
+
+
+    return l_Steps
+            
+    
+    
 
 
      
@@ -923,28 +787,40 @@ for i in range(NumberOfWords):
     DeepExtend(l_HorizontalAnswers[i],l_AllWords)
     DeepExtend(l_VerticalAnswers[i],l_AllWords)
 
-#s_StartingWaffle = input("Enter Your Starting letters: ").lower()
-#s_StartingColors = input("Enter the colors for them (G=Green, Y=Yellow, .=White): ").lower()
-s_StartingWaffle = "eeatslrtehuugloarntay"
-s_StartingColors = "g.yyg...y.g.y...g.gyg"
-try:
-    SetLetters(s_StartingWaffle,s_StartingColors,l_HorizontalKnownLetters,l_VerticalKnownLetters,l_FullyUnhomedLetters)
-except:
-    print("Those lists need to be the same length")
-    quit()
+#s_Waffle = "eeatslrtehuugloarntay"
+#s_Colors = "g.yyg...y.g.y...g.gyg"
+#s_Waffle = "scalkneletiafamnfigel"
+#s_Colors = "gyg.g.y.y.gy.y.ygg..g"
+#s_Waffle = "teerotmechuraordebtvt"
+#s_Colors = "g.y.g..y..g...y.g.y.g"
+#s_Waffle = "fsaefpteltsnofuntaury"
+#s_Colors = "g...g.y...gyy.yggg..g"
+#s_Waffle = "gacuelorrnlawloaymmay"
+#s_Colors = "gyy.g..yy.gg..gyg..yg"
 
-ReducePossibleWords(s_StartingWaffle,s_StartingColors,l_HorizontalKnownLetters,l_VerticalKnownLetters,l_HorizontalAnswers,l_VerticalAnswers,l_FullyUnhomedLetters)
+#s_Waffle = "peetdruaattloepvlaara"
+#s_Colors = "g.y.g...y.gy....gg.yg"
+#s_Waffle = "peetdruapetaltoalarva"
+#s_Colors = "g.y.g...ggggg.y.ggggg"
 
-DisplayWaffle(l_HorizontalKnownLetters,l_VerticalKnownLetters)
-
-for y in range(wordLen):
-    for x in range(wordLen):
-        lPossibleLetters = PossibleLettersAtLocation(x,y,s_StartingWaffle,s_StartingColors,l_HorizontalKnownLetters,l_VerticalKnownLetters,l_HorizontalAnswers,l_VerticalAnswers,l_FullyUnhomedLetters)
-        if not lPossibleLetters == []:
-            print("Possible Letters at ("+str(x)+","+str(y)+") :"+str(lPossibleLetters))
+#deluxe waffle: wordlen = 7, numofwords = 4
+#s_Waffle = "sivroybdoctmsbotgrnsersdaiiserouuieesesu"
+#s_Colors = "yyg.g.y....gygyg.g...ygyg.gyg..yyy.gyg.."
 
 while(AreWeDoneYet(l_HorizontalAnswers,l_VerticalAnswers) == False):
     print("\n")
+    s_Waffle = input("Enter Your setup: ").lower()
+    s_Colors = input("Enter the colors for them (G=Green, Y=Yellow, .=White): ").lower()
+    try:
+        SetLetters(s_Waffle,s_Colors,l_HorizontalKnownLetters,l_VerticalKnownLetters,l_FullyUnhomedLetters)
+    except:
+        print("Those lists need to be the same length")
+        continue
+
+    ReducePossibleWords(s_Waffle,s_Colors,l_HorizontalKnownLetters,l_VerticalKnownLetters,l_HorizontalAnswers,l_VerticalAnswers,l_FullyUnhomedLetters)
+    ReduceByPlaying_Extensible(s_Waffle,l_HorizontalAnswers,l_VerticalAnswers,l_HorizontalKnownLetters,l_VerticalKnownLetters)
+    #ReduceByPlaying(s_Waffle,l_HorizontalAnswers,l_VerticalAnswers,l_HorizontalKnownLetters,l_VerticalKnownLetters)
+
     print("Possible Horizontal words:")
     for i in range(len(l_HorizontalAnswers)):
         if len(l_HorizontalAnswers[i]) > 1:
@@ -957,34 +833,28 @@ while(AreWeDoneYet(l_HorizontalAnswers,l_VerticalAnswers) == False):
     print("Possible Vertical words:")
     for i in range(len(l_VerticalAnswers)):
         if len(l_VerticalAnswers[i]) > 1:
-            print("Row "+str(i+1)+": "+str(len(l_VerticalAnswers[i]))+" words remaining.")
+            print("Column "+str(i+1)+": "+str(len(l_VerticalAnswers[i]))+" words remaining.")
             if len(l_VerticalAnswers[i]) < 15:
                 print(str(l_VerticalAnswers[i]))
         else:
-            print("Row "+str(i+1)+" answer: "+str(l_HorizontalAnswers[i][0]))
-
-    l_AllHorrizAnswers = []
-    for i in range(len(l_HorizontalAnswers)):
-        if len(l_HorizontalAnswers[i]) > 1:
-            l_AllHorrizAnswers.extend(l_HorizontalAnswers[i])
-     #put all the answers in one list
-
-    l_AllKnownLetters = []
-    for i in range(len(l_KnownLetters)):
-        if len(l_KnownLetters[i]) > 1:
-            l_AllKnownLetters.extend(l_KnownLetters[i])
-    for i in range(len(l_KnownBadLetters)):
-        if len(l_KnownBadLetters[i]) > 1:
-            l_AllKnownLetters.extend(l_KnownBadLetters[i])
-
-    suggestWord(l_AllHorrizAnswers, wordLen+1, l_AllKnownLetters, l_AllWords, True)
-    InterrogateUserForInfo_and_FilterWordlist()
-    ReducePossibleWords(l_HorizontalAnswers,l_VerticalAnswers)
+            print("Column "+str(i+1)+" answer: "+str(l_VerticalAnswers[i][0]))
 
     print("\n")
-    print("Possible Letters at all locations:")
-    UncertaintyCube(l_HorizontalAnswers,l_VerticalAnswers)
+    print("Known Letters:")
+    DisplayWaffle(l_HorizontalKnownLetters,l_VerticalKnownLetters)
 
-    b_FirstRun = False
+    l_Swaps = GetMinimumSwaps(s_Waffle,l_HorizontalAnswers,l_VerticalAnswers,l_HorizontalKnownLetters,l_VerticalKnownLetters)
+    if len(l_Swaps) > 10:
+        print("WARNING: this is more than 10 swaps required!")
+    else:
+        print(str(len(l_Swaps))+" swaps proposed:")
+    for i in range(len(l_Swaps)):
+        print("Swap #"+str(i+1)+": \""+str(l_Swaps[i][2])+"\"("+str(l_Swaps[i][0])+","+str(l_Swaps[i][1])+") to \""+str(l_Swaps[i][5])+"\"("+str(l_Swaps[i][3])+","+str(l_Swaps[i][4])+")")
+
+    for y in range(wordLen):
+        for x in range(wordLen):
+            lPossibleLetters = PossibleLettersAtLocation(x,y,s_Waffle,s_Colors,l_HorizontalKnownLetters,l_VerticalKnownLetters,l_HorizontalAnswers,l_VerticalAnswers,l_FullyUnhomedLetters)
+            if len(lPossibleLetters)>1:
+                print("Possible Letters at ("+str(x)+","+str(y)+") :"+str(lPossibleLetters))
 
 print("Done!") #normally I'd print out the answer here, but that's already done.
