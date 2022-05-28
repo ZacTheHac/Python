@@ -1,3 +1,4 @@
+from collections import deque
 import copy
 import io
 import re
@@ -756,7 +757,7 @@ def GetMinimumSwaps(sLetters,l_HorizAnswers,l_VertAnswers,l_HorizLetters,l_VertL
                     elif sTarget[indexOfWanted] == ".":
                         #Swap is indeterminate, don't do it yet.
                         notDone = False #in case this was the last one holding it back.
-                    elif len(l_Indexes) == 1 or (k == len(l_Indexes)-1):
+                    elif len(l_Indexes) == 1: #or (k == len(l_Indexes)-1):
                         #kinda have to make this swap. it's the only possible option, or we've tried all the others.
                         fromCoords = LetterIndextoGeneralCoords(indexOfWanted,iWordLen,iNumOfWords)
                         toCoords = LetterIndextoGeneralCoords(i,iWordLen,iNumOfWords)
@@ -766,8 +767,178 @@ def GetMinimumSwaps(sLetters,l_HorizAnswers,l_VertAnswers,l_HorizLetters,l_VertL
 
 
     return l_Steps
-            
+
+def GetPossibleSwaps(lCurrentState, sTarget) -> list:
+    for Loop in range(2):
+        lReturnList = [] #[fromIndex,ToIndex,NewBoardState] for each index
+        iOutOfPlace = 0
+        for i in range(len(lCurrentState)):
+                if lCurrentState[i] != sTarget[i] and sTarget[i] != ".":
+                    iOutOfPlace += 1
+                    wantedChar = sTarget[i]
+                    haveChar = lCurrentState[i]
+                    l_IndexesOfWantedChar = []
+                    lTempList = [] #only holds current state swaps. Useful if we're only looking for perfects
+                    PerfectOnly = False
+                    #get all possibilities
+                    for j in range(len(lCurrentState)):
+                        if lCurrentState[j] == wantedChar and sTarget[j] != wantedChar: #this is an out of place character and it's a character we're looking for
+                            l_IndexesOfWantedChar.append(j)
+                    for k in range(len(l_IndexesOfWantedChar)):
+                        indexOfWanted = l_IndexesOfWantedChar[k]
+                        if sTarget[indexOfWanted] != ".":
+                            if sTarget[indexOfWanted] == haveChar: #obvious swap, they belong in each other's spot
+                                if PerfectOnly == False:
+                                    lTempList = [] #clear out all the non-perfect swaps
+                                    PerfectOnly = True
+                                lNewBoardState = []
+                                DeepExtend(lNewBoardState,lCurrentState)
+                                lNewBoardState[indexOfWanted] = haveChar
+                                lNewBoardState[i] = wantedChar
+                                lTempList.append([i,indexOfWanted,lNewBoardState])
+                            elif PerfectOnly == False:
+                                if len(l_IndexesOfWantedChar) == 1 or Loop == 1:
+                                    lNewBoardState = []
+                                    DeepExtend(lNewBoardState,lCurrentState)
+                                    lNewBoardState[indexOfWanted] = haveChar
+                                    lNewBoardState[i] = wantedChar
+                                    lTempList.append([i,indexOfWanted,lNewBoardState])
+                    lReturnList.extend(lTempList)
+        if len(lReturnList) > 0: #if it didn't find any perfect swaps, we'll loop again and find all swaps.
+            return lReturnList
+    return lReturnList
+
+def BFS_SP(graph, start, goal):
+    explored = []
+     
+    # Queue for traversing the
+    # graph in the BFS
+    queue = [[start]]
+     
+    # If the desired node is
+    # reached
+    if start == goal:
+        return [start]
+     
+    # Loop to traverse the graph
+    # with the help of the queue
+    while queue:
+        path = queue.pop(0)
+        node = path[-1]
+         
+        # Condition to check if the
+        # current node is not visited
+        if node not in explored:
+            neighbours = graph[node]
+             
+            # Loop to iterate over the
+            # neighbours of the node
+            for neighbour in neighbours:
+                new_path = list(path)
+                new_path.append(neighbour)
+                queue.append(new_path)
+                 
+                # Condition to check if the
+                # neighbour node is the goal
+                if neighbour == goal:
+                    return new_path
+            explored.append(node)
+ 
+    # Condition when the nodes
+    # are not connected
+    return None
+
+def GetMinimumSwaps_graph(sLetters,l_HorizAnswers,l_VertAnswers,l_HorizLetters,l_VertLetters) -> list:
+    #have a set representing the connections
+    #have a set of arrays holding the swaps, the current total cost, and the array setup at the moment.
+    #if the array setup isn't the answer, add more options to it
+    #once all nodes have been processed to their options or are a complete state, find the one with the lowest cost.
+    #Follow the graph backwards to find the list of swaps neccesary
+    iWordLen = len(l_HorizAnswers[0][0])
+    iNumOfWords = len(l_HorizAnswers)
+    sTarget = SolutionAsString(l_HorizLetters,l_VertLetters)
+    lBoardState = []
+    lTarget = []
+    for char in sLetters:
+        lBoardState.append(char)
+    for char in sTarget:
+        lTarget.append(char)
     
+    #states = [[startingarray],[boardstate1]]
+    #swaps = [[FromIndex,ToIndex],[FromIndex, ToIndex]]
+    #setConnections = {0:[1,2],1:[2],2:[]}
+    #setSwapIndexes = {0:[0,1],1:[2],2:[]} #0 connects to state[1] via swap[0] and state[2] via swap[1], 1 connects to state[2] via swap[2]
+    setConnections = {0:[]}
+    setSwapIndexes = {0:[]}
+    lStates = [lBoardState]
+    lSwaps = []
+    qToBeProcessed = deque([0])
+    goalIndex = None
+    while len(qToBeProcessed):
+            iCurrentNode = qToBeProcessed.popleft()
+            while qToBeProcessed.count(iCurrentNode): #in case it got added multiple times. Shouldn't be possible, but... eh.
+                qToBeProcessed.remove(iCurrentNode)
+            lPossibleMoves = GetPossibleSwaps(lStates[iCurrentNode],sTarget)
+            for move in lPossibleMoves:
+                swapIndex = None
+                stateIndex = None
+
+                #get swapIndex
+                swapOrder1 = [move[0],move[1]]
+                swapOrder2 = [move[1],move[0]]
+                if swapOrder1 in lSwaps:
+                    swapIndex = lSwaps.index(swapOrder1)
+                elif swapOrder2 in lSwaps:
+                    swapIndex = lSwaps.index(swapOrder2)
+                else:
+                    swapIndex = len(lSwaps)
+                    lSwaps.append(swapOrder1)
+
+                #get stateIndex
+                state = move[2]
+                if state in lStates:
+                    stateIndex = lStates.index(state)
+                else:
+                    stateIndex = len(lStates)
+                    lStates.append(state)
+                if state == lTarget and goalIndex == None:
+                    print("Goal Found!")
+                    goalIndex = stateIndex
+                
+                #now fill in the connections.
+                setConnections[iCurrentNode].append(stateIndex) #we now know this node can find this new state
+                setSwapIndexes[iCurrentNode].append(swapIndex) #via this swap
+                if setConnections.get(stateIndex) == None:
+                    #this state didn't exist before. add it.
+                    setConnections[stateIndex] = []
+                    setSwapIndexes[stateIndex] = []
+                    #set it to be searched eventually:
+                    qToBeProcessed.append(stateIndex)
+                #the reverse is also true
+                setConnections[stateIndex].append(iCurrentNode)
+                setSwapIndexes[stateIndex].append(swapIndex)
+    #using this graph, find the fastest path through it
+    solution = BFS_SP(setConnections, 0, goalIndex)
+    #now make that list of states into something usable.
+    SolutionSwaps = []
+    LastState = 0
+    for i in range(1,len(solution)):
+        swapNum = setConnections[LastState].index(solution[i])
+        fromIndex = min(lSwaps[setSwapIndexes[LastState][swapNum]])
+        toIndex = max(lSwaps[setSwapIndexes[LastState][swapNum]])
+        fromCoords = LetterIndextoGeneralCoords(fromIndex,iWordLen,iNumOfWords)
+        toCoords = LetterIndextoGeneralCoords(toIndex,iWordLen,iNumOfWords)
+        fromChar = lBoardState[fromIndex]
+        toChar = lBoardState[toIndex]
+
+        SolutionSwaps.append([fromCoords[0],fromCoords[1],fromChar,toCoords[0],toCoords[1],toChar])
+        lBoardState[fromIndex] = toChar
+        lBoardState[toIndex] = fromChar
+        LastState = solution[i]
+    return SolutionSwaps
+                
+
+
     
 
 
@@ -797,6 +968,8 @@ for i in range(NumberOfWords):
 #s_Colors = "g...g.y...gyy.yggg..g"
 #s_Waffle = "gacuelorrnlawloaymmay"
 #s_Colors = "gyy.g..yy.gg..gyg..yg"
+#s_Waffle = "mlnedtlrnidueooularoy"
+#s_Colors = "g.y.gy...gg..y.yg.gyg"
 
 #s_Waffle = "peetdruaattloepvlaara"
 #s_Colors = "g.y.g...y.gy....gg.yg"
@@ -811,6 +984,7 @@ while(AreWeDoneYet(l_HorizontalAnswers,l_VerticalAnswers) == False):
     print("\n")
     s_Waffle = input("Enter Your setup: ").lower()
     s_Colors = input("Enter the colors for them (G=Green, Y=Yellow, .=White): ").lower()
+
     try:
         SetLetters(s_Waffle,s_Colors,l_HorizontalKnownLetters,l_VerticalKnownLetters,l_FullyUnhomedLetters)
     except:
@@ -843,7 +1017,8 @@ while(AreWeDoneYet(l_HorizontalAnswers,l_VerticalAnswers) == False):
     print("Known Letters:")
     DisplayWaffle(l_HorizontalKnownLetters,l_VerticalKnownLetters)
 
-    l_Swaps = GetMinimumSwaps(s_Waffle,l_HorizontalAnswers,l_VerticalAnswers,l_HorizontalKnownLetters,l_VerticalKnownLetters)
+    l_Swaps = GetMinimumSwaps_graph(s_Waffle,l_HorizontalAnswers,l_VerticalAnswers,l_HorizontalKnownLetters,l_VerticalKnownLetters)
+    #l_Swaps = GetMinimumSwaps(s_Waffle,l_HorizontalAnswers,l_VerticalAnswers,l_HorizontalKnownLetters,l_VerticalKnownLetters)
     if len(l_Swaps) > 10:
         print("WARNING: this is more than 10 swaps required!")
     else:
