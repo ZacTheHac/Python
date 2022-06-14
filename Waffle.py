@@ -1,25 +1,20 @@
 from collections import deque
 import copy
 import io
+import multiprocessing
 import re
+import threading
+import time
 
 #hardcoded variables
 bannedChars = ["'","Å","â","ä","á","å","ç","é","è","ê","í","ñ","ó","ô","ö","ü","û","-"," "]
 wordLen = 5
 NumberOfWords = 3
-#Deluxe Waffle settings
-#wordLen = 7
-#NumberOfWords = 4
 
 
 #global variables
-l_HorizontalAnswers = [[] for i in range(NumberOfWords)]
-l_VerticalAnswers = [[] for i in range(NumberOfWords)]
 l_FullyUnhomedLetters = []
 l_AllKnownLetters = []
-
-l_VerticalKnownLetters = [["."] * wordLen for i in range(NumberOfWords)]
-l_HorizontalKnownLetters = [["."] * wordLen for i in range(NumberOfWords)]
 
 l_AllWords = []
 
@@ -764,8 +759,6 @@ def GetMinimumSwaps(sLetters,l_HorizAnswers,l_VertAnswers,l_HorizLetters,l_VertL
                         l_Steps.append([fromCoords[0],fromCoords[1],wantedChar,toCoords[0],toCoords[1],haveChar])
                         lScratch[i] = wantedChar
                         lScratch[indexOfWanted] = haveChar
-
-
     return l_Steps
 
 def GetPossibleSwaps(lCurrentState, sTarget) -> list:
@@ -795,14 +788,24 @@ def GetPossibleSwaps(lCurrentState, sTarget) -> list:
                                 DeepExtend(lNewBoardState,lCurrentState)
                                 lNewBoardState[indexOfWanted] = haveChar
                                 lNewBoardState[i] = wantedChar
-                                lTempList.append([i,indexOfWanted,lNewBoardState])
+                                newSwap = [i,indexOfWanted,lNewBoardState]
+                                newSwapReverse = [indexOfWanted,i,lNewBoardState]
+                                if not (newSwap in lTempList or newSwapReverse in lTempList or newSwap in lReturnList or newSwapReverse in lReturnList): #already know this swap
+                                    lTempList.append(newSwap)
+                                else:
+                                    pass
                             elif PerfectOnly == False:
                                 if len(l_IndexesOfWantedChar) == 1 or Loop == 1:
                                     lNewBoardState = []
                                     DeepExtend(lNewBoardState,lCurrentState)
                                     lNewBoardState[indexOfWanted] = haveChar
                                     lNewBoardState[i] = wantedChar
-                                    lTempList.append([i,indexOfWanted,lNewBoardState])
+                                    newSwap = [i,indexOfWanted,lNewBoardState]
+                                    newSwapReverse = [indexOfWanted,i,lNewBoardState]
+                                    if not (newSwap in lTempList or newSwapReverse in lTempList or newSwap in lReturnList or newSwapReverse in lReturnList): #already know this swap
+                                        lTempList.append(newSwap)
+                                    else:
+                                        pass
                     lReturnList.extend(lTempList)
         if len(lReturnList) > 0: #if it didn't find any perfect swaps, we'll loop again and find all swaps.
             return lReturnList
@@ -870,7 +873,9 @@ def GetMinimumSwaps_graph(sLetters,l_HorizAnswers,l_VertAnswers,l_HorizLetters,l
     #setSwapIndexes = {0:[0,1],1:[2],2:[]} #0 connects to state[1] via swap[0] and state[2] via swap[1], 1 connects to state[2] via swap[2]
     setConnections = {0:[]}
     setSwapIndexes = {0:[]}
-    lStates = [lBoardState]
+    lStates = [[]]
+    for char in lBoardState:
+        lStates[0].append(char) #Wish I could've just said lStates = [lBoardState], but that makes a shallow copy that causes problems :D
     lSwaps = []
     qToBeProcessed = deque([0])
     goalIndex = None
@@ -936,8 +941,250 @@ def GetMinimumSwaps_graph(sLetters,l_HorizAnswers,l_VertAnswers,l_HorizLetters,l
         lBoardState[toIndex] = fromChar
         LastState = solution[i]
     return SolutionSwaps
-                
 
+def GMS_ThreadBreakout(lStates:list,lSwaps:list,iCurrentNode:int,sTarget:str,setConnections:dict,setSwapIndexes:dict,newStates:list) -> list:
+    """Returns new states to be processed, also appends them to the "newStates" object"""
+    lPossibleMoves = GetPossibleSwaps(lStates[iCurrentNode],sTarget)
+    lock = threading.Lock()
+    lock.acquire()
+    for move in lPossibleMoves:
+        swapIndex = None
+        stateIndex = None
+
+        #get swapIndex
+        swapOrder1 = [move[0],move[1]]
+        swapOrder2 = [move[1],move[0]]
+        if swapOrder1 in lSwaps:
+            swapIndex = lSwaps.index(swapOrder1)
+        elif swapOrder2 in lSwaps:
+            swapIndex = lSwaps.index(swapOrder2)
+        else:
+            swapIndex = len(lSwaps)
+            lSwaps.append(swapOrder1)
+
+        #get stateIndex
+        state = move[2]
+        if state in lStates:
+            stateIndex = lStates.index(state)
+        else:
+            stateIndex = len(lStates)
+            lStates.append(state)
+        #if state == lTarget and goalIndex == None:
+        #    print("Goal Found!")
+        #    goalIndex = stateIndex
+        
+        #now fill in the connections.
+        setConnections[iCurrentNode].append(stateIndex) #we now know this node can find this new state
+        setSwapIndexes[iCurrentNode].append(swapIndex) #via this swap
+        if setConnections.get(stateIndex) == None:
+            #this state didn't exist before. add it.
+            setConnections[stateIndex] = []
+            setSwapIndexes[stateIndex] = []
+            #set it to be searched eventually:
+            newStates.append(stateIndex)
+            #qToBeProcessed.append(stateIndex)
+        #the reverse is also true
+        setConnections[stateIndex].append(iCurrentNode)
+        setSwapIndexes[stateIndex].append(swapIndex)
+    lock.release()
+    return newStates
+
+def GetMinimumSwaps_graph_Multithread(sLetters,l_HorizAnswers,l_VertAnswers,l_HorizLetters,l_VertLetters) -> list:
+    #have a set representing the connections
+    #have a set of arrays holding the swaps, the current total cost, and the array setup at the moment.
+    #if the array setup isn't the answer, add more options to it
+    #once all nodes have been processed to their options or are a complete state, find the one with the lowest cost.
+    #Follow the graph backwards to find the list of swaps neccesary
+    iWordLen = len(l_HorizAnswers[0][0])
+    iNumOfWords = len(l_HorizAnswers)
+    sTarget = SolutionAsString(l_HorizLetters,l_VertLetters)
+    lBoardState = []
+    lTarget = []
+    for char in sLetters:
+        lBoardState.append(char)
+    for char in sTarget:
+        lTarget.append(char)
+    
+    #states = [[startingarray],[boardstate1]]
+    #swaps = [[FromIndex,ToIndex],[FromIndex, ToIndex]]
+    #setConnections = {0:[1,2],1:[2],2:[]}
+    #setSwapIndexes = {0:[0,1],1:[2],2:[]} #0 connects to state[1] via swap[0] and state[2] via swap[1], 1 connects to state[2] via swap[2]
+    setConnections = {0:[]}
+    setSwapIndexes = {0:[]}
+    lStates = [[]]
+    for char in lBoardState:
+        lStates[0].append(char) #Wish I could've just said lStates = [lBoardState], but that makes a shallow copy that causes problems :D
+    lSwaps = []
+    qToBeProcessed = deque([0])
+    goalIndex = None
+    while len(qToBeProcessed):
+        newStates = []
+        #print("Launching "+str(len(qToBeProcessed))+" thread(s).")
+        for i in range(len(qToBeProcessed)):
+            iCurrentNode = qToBeProcessed.popleft()
+            while qToBeProcessed.count(iCurrentNode): #in case it got added multiple times. Shouldn't be possible, but... eh.
+                qToBeProcessed.remove(iCurrentNode)
+            t=threading.Thread(target=GMS_ThreadBreakout,args=(lStates,lSwaps,iCurrentNode,sTarget,setConnections,setSwapIndexes,newStates))
+            t.start()
+            #newStates = GMS_ThreadBreakout(lStates,lSwaps,iCurrentNode,sTarget,setConnections,setSwapIndexes)
+        #print("Threads Launched.")
+        for t in threading.enumerate():
+            if t is not threading.currentThread():
+                t.join()
+        #print("All threads done.")
+        if goalIndex == None:
+            try:
+                goalIndex = lStates.index(lTarget)
+                print("Goal Found!")
+            except:
+                pass
+        for NState in newStates:
+            qToBeProcessed.append(NState)
+    #using this graph, find the fastest path through it
+    solution = BFS_SP(setConnections, 0, goalIndex)
+    #now make that list of states into something usable.
+    SolutionSwaps = []
+    LastState = 0
+    for i in range(1,len(solution)):
+        swapNum = setConnections[LastState].index(solution[i])
+        fromIndex = min(lSwaps[setSwapIndexes[LastState][swapNum]])
+        toIndex = max(lSwaps[setSwapIndexes[LastState][swapNum]])
+        fromCoords = LetterIndextoGeneralCoords(fromIndex,iWordLen,iNumOfWords)
+        toCoords = LetterIndextoGeneralCoords(toIndex,iWordLen,iNumOfWords)
+        fromChar = lBoardState[fromIndex]
+        toChar = lBoardState[toIndex]
+
+        SolutionSwaps.append([fromCoords[0],fromCoords[1],fromChar,toCoords[0],toCoords[1],toChar])
+        lBoardState[fromIndex] = toChar
+        lBoardState[toIndex] = fromChar
+        LastState = solution[i]
+    return SolutionSwaps
+
+def GMS_ProcessBreakout(State:list,sTarget:str,iStateIndex:int,qPossibleMoves:multiprocessing.Queue) -> list:
+    lPossibleMoves = GetPossibleSwaps(State,sTarget)
+    for move in lPossibleMoves:
+        qPossibleMoves.put([iStateIndex,move[0],move[1],move[2]]) #return starting index, from index, to index, ending state
+
+def ProcessMove(move:list,lStates:list,lSwaps:list,setConnections:dict,setSwapIndexes:dict,qToBeProcessed):
+    swapIndex = None
+    stateIndex = None
+
+    #get swapIndex
+    swapOrder1 = [move[1],move[2]]
+    swapOrder2 = [move[2],move[1]]
+    if swapOrder1 in lSwaps:
+        swapIndex = lSwaps.index(swapOrder1)
+    elif swapOrder2 in lSwaps:
+        swapIndex = lSwaps.index(swapOrder2)
+    else:
+        swapIndex = len(lSwaps)
+        lSwaps.append(swapOrder1)
+
+    #get stateIndex
+    state = move[3]
+    if state in lStates:
+        stateIndex = lStates.index(state)
+    else:
+        stateIndex = len(lStates)
+        lStates.append(state)
+
+    #now fill in the connections.
+    setConnections[move[0]].append(stateIndex) #we now know this node can find this new state
+    setSwapIndexes[move[0]].append(swapIndex) #via this swap
+    if setConnections.get(stateIndex) == None:
+        #this state didn't exist before. add it.
+        setConnections[stateIndex] = []
+        setSwapIndexes[stateIndex] = []
+        #set it to be searched eventually:
+        qToBeProcessed.append(stateIndex)
+    #the reverse is also true
+    setConnections[stateIndex].append(move[0])
+    setSwapIndexes[stateIndex].append(swapIndex)
+
+def GetMinimumSwaps_graph_MultiProcess(sLetters,l_HorizLetters,l_VertLetters) -> list:
+    #have a set representing the connections
+    #have a set of arrays holding the swaps, the current total cost, and the array setup at the moment.
+    #if the array setup isn't the answer, add more options to it
+    #once all nodes have been processed to their options or are a complete state, find the one with the lowest cost.
+    #Follow the graph backwards to find the list of swaps neccesary
+    iWordLen = len(l_HorizLetters[0])
+    iNumOfWords = len(l_HorizLetters)
+    sTarget = SolutionAsString(l_HorizLetters,l_VertLetters)
+    lBoardState = []
+    lTarget = []
+    for char in sLetters:
+        lBoardState.append(char)
+    for char in sTarget:
+        lTarget.append(char)
+    
+    #states = [[startingarray],[boardstate1]]
+    #swaps = [[FromIndex,ToIndex],[FromIndex, ToIndex]]
+    #setConnections = {0:[1,2],1:[2],2:[]}
+    #setSwapIndexes = {0:[0,1],1:[2],2:[]} #0 connects to state[1] via swap[0] and state[2] via swap[1], 1 connects to state[2] via swap[2]
+    setConnections = {0:[]}
+    setSwapIndexes = {0:[]}
+    lStates = [[]]
+    for char in lBoardState:
+        lStates[0].append(char) #Wish I could've just said lStates = [lBoardState], but that makes a shallow copy that causes problems :D
+    lSwaps = []
+    qToBeProcessed = deque([0])
+    multiprocessing.set_start_method('spawn')
+    QPossibleMoves = multiprocessing.Queue()
+    goalIndex = None
+    while len(qToBeProcessed):
+        maxThreads = min(len(qToBeProcessed),100)
+        for i in range(maxThreads):
+            iCurrentNode = qToBeProcessed.popleft()
+            while qToBeProcessed.count(iCurrentNode): #in case it got added multiple times. Shouldn't be possible, but... eh.
+                qToBeProcessed.remove(iCurrentNode)
+            p = multiprocessing.Process(target=GMS_ProcessBreakout,args=(lStates[iCurrentNode],sTarget,iCurrentNode,QPossibleMoves))
+            p.start()
+        
+        while True:
+            try:
+                for i in range(QPossibleMoves.qsize()):
+                    move = QPossibleMoves.get()
+                    ProcessMove(move,lStates,lSwaps,setConnections,setSwapIndexes,qToBeProcessed)
+            except:
+                pass
+            if len(multiprocessing.active_children())==0:
+                break
+
+        #for t in multiprocessing.active_children(): #shouldn't be needed because it only gets here if there's no more active children, and calling active_children() auto-joins all finished processes
+        #    if t is not multiprocessing.current_process():
+        #        t.join()
+        if len(qToBeProcessed)<8 and QPossibleMoves.qsize() > 0: #running out of possible states, but still have swaps in the queue = pause and process all of them
+            print("Catching up!")
+            for i in range(QPossibleMoves.qsize()):
+                    move = QPossibleMoves.get()
+                    ProcessMove(move,lStates,lSwaps,setConnections,setSwapIndexes,qToBeProcessed)
+        if goalIndex == None:
+                try:
+                    goalIndex = lStates.index(lTarget)
+                    print("Goal Found!")
+                except:
+                    pass
+
+
+    #using this graph, find the fastest path through it
+    solution = BFS_SP(setConnections, 0, goalIndex)
+    #now make that list of states into something usable.
+    SolutionSwaps = []
+    LastState = 0
+    for i in range(1,len(solution)):
+        swapNum = setConnections[LastState].index(solution[i])
+        fromIndex = min(lSwaps[setSwapIndexes[LastState][swapNum]])
+        toIndex = max(lSwaps[setSwapIndexes[LastState][swapNum]])
+        fromCoords = LetterIndextoGeneralCoords(fromIndex,iWordLen,iNumOfWords)
+        toCoords = LetterIndextoGeneralCoords(toIndex,iWordLen,iNumOfWords)
+        fromChar = lBoardState[fromIndex]
+        toChar = lBoardState[toIndex]
+
+        SolutionSwaps.append([fromCoords[0],fromCoords[1],fromChar,toCoords[0],toCoords[1],toChar])
+        lBoardState[fromIndex] = toChar
+        lBoardState[toIndex] = fromChar
+        LastState = solution[i]
+    return SolutionSwaps
 
     
 
@@ -951,13 +1198,90 @@ def GetMinimumSwaps_graph(sLetters,l_HorizAnswers,l_VertAnswers,l_HorizLetters,l
 
 
 #program
-build_dictionary(wordLen,bannedChars)
+if __name__ == '__main__':
 
-#lists loaded. Fill the lists.
-for i in range(NumberOfWords):
-    DeepExtend(l_HorizontalAnswers[i],l_AllWords)
-    DeepExtend(l_VerticalAnswers[i],l_AllWords)
+    #Deluxe Waffle settings
+    bDeluxe = False
+    if bDeluxe:
+        wordLen = 7
+        NumberOfWords = 4
+    l_HorizontalAnswers = [[] for i in range(NumberOfWords)]
+    l_VerticalAnswers = [[] for i in range(NumberOfWords)]
+    l_VerticalKnownLetters = [["."] * wordLen for i in range(NumberOfWords)]
+    l_HorizontalKnownLetters = [["."] * wordLen for i in range(NumberOfWords)]
 
+    build_dictionary(wordLen,bannedChars)
+    #lists loaded. Fill the lists.
+    for i in range(NumberOfWords):
+        DeepExtend(l_HorizontalAnswers[i],l_AllWords)
+        DeepExtend(l_VerticalAnswers[i],l_AllWords)
+
+    while(AreWeDoneYet(l_HorizontalAnswers,l_VerticalAnswers) == False):
+        print("\n")
+        s_Waffle = input("Enter Your setup: ").lower()
+        s_Colors = input("Enter the colors for them (G=Green, Y=Yellow, .=White): ").lower()
+
+        try:
+            SetLetters(s_Waffle,s_Colors,l_HorizontalKnownLetters,l_VerticalKnownLetters,l_FullyUnhomedLetters)
+        except:
+            print("Those lists need to be the same length")
+            continue
+
+        ReducePossibleWords(s_Waffle,s_Colors,l_HorizontalKnownLetters,l_VerticalKnownLetters,l_HorizontalAnswers,l_VerticalAnswers,l_FullyUnhomedLetters)
+        ReduceByPlaying_Extensible(s_Waffle,l_HorizontalAnswers,l_VerticalAnswers,l_HorizontalKnownLetters,l_VerticalKnownLetters)
+        #ReduceByPlaying(s_Waffle,l_HorizontalAnswers,l_VerticalAnswers,l_HorizontalKnownLetters,l_VerticalKnownLetters)
+
+        print("Possible Horizontal words:")
+        for i in range(len(l_HorizontalAnswers)):
+            if len(l_HorizontalAnswers[i]) > 1:
+                print("Row "+str(i+1)+": "+str(len(l_HorizontalAnswers[i]))+" words remaining.")
+                if len(l_HorizontalAnswers[i]) < 15:
+                    print(str(l_HorizontalAnswers[i]))
+            else:
+                print("Row "+str(i+1)+" answer: "+str(l_HorizontalAnswers[i][0]))
+        print("\n")
+        print("Possible Vertical words:")
+        for i in range(len(l_VerticalAnswers)):
+            if len(l_VerticalAnswers[i]) > 1:
+                print("Column "+str(i+1)+": "+str(len(l_VerticalAnswers[i]))+" words remaining.")
+                if len(l_VerticalAnswers[i]) < 15:
+                    print(str(l_VerticalAnswers[i]))
+            else:
+                print("Column "+str(i+1)+" answer: "+str(l_VerticalAnswers[i][0]))
+
+        print("\n")
+        print("Known Letters:")
+        DisplayWaffle(l_HorizontalKnownLetters,l_VerticalKnownLetters)
+
+        #startTime = time.time()
+        #l_Swaps = GetMinimumSwaps_graph_Multithread(s_Waffle,l_HorizontalAnswers,l_VerticalAnswers,l_HorizontalKnownLetters,l_VerticalKnownLetters)
+        #print("Multithread took ",time.time()-startTime)
+        #startTime = time.time()
+        #l_Swaps = GetMinimumSwaps_graph_MultiProcess(s_Waffle,l_HorizontalKnownLetters,l_VerticalKnownLetters)
+        #print("Multiprocess took ",time.time()-startTime)
+        startTime = time.time()
+        l_Swaps = GetMinimumSwaps_graph(s_Waffle,l_HorizontalAnswers,l_VerticalAnswers,l_HorizontalKnownLetters,l_VerticalKnownLetters)
+        print("Single thread graph traversal took ",time.time()-startTime)
+        #l_Swaps = GetMinimumSwaps(s_Waffle,l_HorizontalAnswers,l_VerticalAnswers,l_HorizontalKnownLetters,l_VerticalKnownLetters)
+        if (bDeluxe == False and len(l_Swaps)) > 10 or (bDeluxe == True and len(l_Swaps) > 20):
+            print("WARNING: this is "+str(len(l_Swaps))+" swaps!")
+        else:
+            print(str(len(l_Swaps))+" swaps proposed:")
+        for i in range(len(l_Swaps)):
+            print("Swap #"+str(i+1)+": \""+str(l_Swaps[i][2])+"\"("+str(l_Swaps[i][0])+","+str(l_Swaps[i][1])+") to \""+str(l_Swaps[i][5])+"\"("+str(l_Swaps[i][3])+","+str(l_Swaps[i][4])+")")
+
+        for y in range(wordLen):
+            for x in range(wordLen):
+                lPossibleLetters = PossibleLettersAtLocation(x,y,s_Waffle,s_Colors,l_HorizontalKnownLetters,l_VerticalKnownLetters,l_HorizontalAnswers,l_VerticalAnswers,l_FullyUnhomedLetters)
+                if len(lPossibleLetters)>1:
+                    print("Possible Letters at ("+str(x)+","+str(y)+") :"+str(lPossibleLetters))
+
+    print("Done!") #normally I'd print out the answer here, but that's already done.
+
+
+
+#s_Waffle = "aplttdeeeeoddsgerrsny"
+#s_Colors = "gy..g.ygy.g.....g...g"
 #s_Waffle = "eeatslrtehuugloarntay"
 #s_Colors = "g.yyg...y.g.y...g.gyg"
 #s_Waffle = "scalkneletiafamnfigel"
@@ -970,6 +1294,35 @@ for i in range(NumberOfWords):
 #s_Colors = "gyy.g..yy.gg..gyg..yg"
 #s_Waffle = "mlnedtlrnidueooularoy"
 #s_Colors = "g.y.gy...gg..y.yg.gyg"
+#s_Waffle = "cldarahdxopeulivreeey"
+#s_Colors = "g...g..y..g.y...g.y.g"
+#s_Waffle = "stcaluwtlldeariaetelh"
+#s_Colors = "g...g..yy.g.y...gyy.g"
+#vertical Solution for ^ is "slate"
+#100
+#s_Waffle = "mmkoyeuiaomerropahcln"
+#s_Colors = "g.y.g.y.ygg.y...g...g"
+#101
+#s_Waffle = "gbpptodennisewrasnerd"
+#s_Colors = "g...gyyyy.g.g...gyg.g"
+#127
+#s_Waffle = "vueieteiiimlivasdeotr"
+#s_Colors = "gy..g...y.g..y.ygg.yg"
+#128
+#s_Waffle = "leaoriyaeeeeakkglatwn"
+#s_Colors = "gyy.g..gygg...y.g.y.g"
+#129
+#s_Waffle = "clemhavsssiseurasdkry"
+#s_Colors = "g.y.gyyyy.gg....gy..g"
+#130 (5/31/22)
+#s_Waffle = "mrteybdeenoieldrtnaad"
+#s_Colors = "g.yyg...y.g.g.g.gyy.g"
+#131
+#s_Waffle = "spudyiumtoilmuwolpmoy"
+#s_Colors = "g.y.gy.y.yg.g...gyg.g"
+#142
+#s_Waffle = "wmcrnaagoimtocaetoesh"
+#s_Colors = "g...g.g.yygyy.y.g.y.g"
 
 #s_Waffle = "peetdruaattloepvlaara"
 #s_Colors = "g.y.g...y.gy....gg.yg"
@@ -979,57 +1332,9 @@ for i in range(NumberOfWords):
 #deluxe waffle: wordlen = 7, numofwords = 4
 #s_Waffle = "sivroybdoctmsbotgrnsersdaiiserouuieesesu"
 #s_Colors = "yyg.g.y....gygyg.g...ygyg.gyg..yyy.gyg.."
-
-while(AreWeDoneYet(l_HorizontalAnswers,l_VerticalAnswers) == False):
-    print("\n")
-    s_Waffle = input("Enter Your setup: ").lower()
-    s_Colors = input("Enter the colors for them (G=Green, Y=Yellow, .=White): ").lower()
-
-    try:
-        SetLetters(s_Waffle,s_Colors,l_HorizontalKnownLetters,l_VerticalKnownLetters,l_FullyUnhomedLetters)
-    except:
-        print("Those lists need to be the same length")
-        continue
-
-    ReducePossibleWords(s_Waffle,s_Colors,l_HorizontalKnownLetters,l_VerticalKnownLetters,l_HorizontalAnswers,l_VerticalAnswers,l_FullyUnhomedLetters)
-    ReduceByPlaying_Extensible(s_Waffle,l_HorizontalAnswers,l_VerticalAnswers,l_HorizontalKnownLetters,l_VerticalKnownLetters)
-    #ReduceByPlaying(s_Waffle,l_HorizontalAnswers,l_VerticalAnswers,l_HorizontalKnownLetters,l_VerticalKnownLetters)
-
-    print("Possible Horizontal words:")
-    for i in range(len(l_HorizontalAnswers)):
-        if len(l_HorizontalAnswers[i]) > 1:
-            print("Row "+str(i+1)+": "+str(len(l_HorizontalAnswers[i]))+" words remaining.")
-            if len(l_HorizontalAnswers[i]) < 15:
-                print(str(l_HorizontalAnswers[i]))
-        else:
-            print("Row "+str(i+1)+" answer: "+str(l_HorizontalAnswers[i][0]))
-    print("\n")
-    print("Possible Vertical words:")
-    for i in range(len(l_VerticalAnswers)):
-        if len(l_VerticalAnswers[i]) > 1:
-            print("Column "+str(i+1)+": "+str(len(l_VerticalAnswers[i]))+" words remaining.")
-            if len(l_VerticalAnswers[i]) < 15:
-                print(str(l_VerticalAnswers[i]))
-        else:
-            print("Column "+str(i+1)+" answer: "+str(l_VerticalAnswers[i][0]))
-
-    print("\n")
-    print("Known Letters:")
-    DisplayWaffle(l_HorizontalKnownLetters,l_VerticalKnownLetters)
-
-    l_Swaps = GetMinimumSwaps_graph(s_Waffle,l_HorizontalAnswers,l_VerticalAnswers,l_HorizontalKnownLetters,l_VerticalKnownLetters)
-    #l_Swaps = GetMinimumSwaps(s_Waffle,l_HorizontalAnswers,l_VerticalAnswers,l_HorizontalKnownLetters,l_VerticalKnownLetters)
-    if len(l_Swaps) > 10:
-        print("WARNING: this is more than 10 swaps required!")
-    else:
-        print(str(len(l_Swaps))+" swaps proposed:")
-    for i in range(len(l_Swaps)):
-        print("Swap #"+str(i+1)+": \""+str(l_Swaps[i][2])+"\"("+str(l_Swaps[i][0])+","+str(l_Swaps[i][1])+") to \""+str(l_Swaps[i][5])+"\"("+str(l_Swaps[i][3])+","+str(l_Swaps[i][4])+")")
-
-    for y in range(wordLen):
-        for x in range(wordLen):
-            lPossibleLetters = PossibleLettersAtLocation(x,y,s_Waffle,s_Colors,l_HorizontalKnownLetters,l_VerticalKnownLetters,l_HorizontalAnswers,l_VerticalAnswers,l_FullyUnhomedLetters)
-            if len(lPossibleLetters)>1:
-                print("Possible Letters at ("+str(x)+","+str(y)+") :"+str(lPossibleLetters))
-
-print("Done!") #normally I'd print out the answer here, but that's already done.
+#Deluxe #5:
+#s_Waffle = "ruorglcupugorttaaenhtrsephoutotruetsearh"
+#s_Colors = "yyg.g..y...gyg.g.g...yg.g.gyg..y.yygygyy"
+#Deluxe #6:
+#s_Waffle = "cespnbsanesaeoatddsanirilrapemlenstdgeee"
+#s_Colors = "yyg.gyyy..ygyg.gyg....g.g.g.gy..yy.g.g.y"
