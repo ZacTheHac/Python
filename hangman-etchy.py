@@ -416,30 +416,36 @@ YOU ARE DEAD.
 
 def getBestPlay(l_wordlist, s_CurrentLayout,c_CurrentGuess) -> str:
     """Returns the board layout that would most benefit the computer by giving the player the least amount of info possible."""
-    l_Combos = generate_FilterCombinations(s_CurrentLayout,c_CurrentGuess)
-    l_FilterResults = [0]*len(l_Combos)
-    s_NotCurrentGuessRegex = "[^"+c_CurrentGuess+"]"
-
-    l_wordsWithoutGuess = filter_wordlist(l_wordlist,"",[c_CurrentGuess])
-    l_RemainingWords = list(set(l_wordlist) - set(l_wordsWithoutGuess))
-    l_FilterResults[0] = len(l_wordsWithoutGuess)
-    i_length = len(l_Combos)
-    for i in range(1,i_length):
-        regex_matchPattern = re.compile(l_Combos[i].replace(".",s_NotCurrentGuessRegex))
-        l_filteredWordlist = list(filter(regex_matchPattern.match,l_RemainingWords)) #run the list against regex all at once
-        if len(l_filteredWordlist) != 0: #only run it if it's worth my time
-            l_RemainingWords = list(set(l_RemainingWords) - set(l_filteredWordlist)) #by removing hits, the process gets faster and faster.
-        l_FilterResults[i] = len(l_filteredWordlist) #get the length of wordlists to inform our descision
-
-    #TODO: maybe add some randomness, but it seems like the best option is WAY ahead of others, so randomness may not add any useful gameplay.
+    l_Filters = [""]*len(l_wordlist) #it's possible each word has a different outcome! So just in case.
+    l_FilterCounts = [0]*len(l_Filters)
+    i_FilterIndex = 0
+    for word in l_wordlist:
+        str_Outcome = ""
+        for letter in word:
+            if letter.lower() == c_CurrentGuess:
+                str_Outcome += c_CurrentGuess
+            else:
+                str_Outcome += "."
+        #result string calculated, Merge the current layout and increment the list.
+        for i in range(len(s_CurrentLayout)):
+            if not s_CurrentLayout[i] == ".":
+                str_Outcome = str_Replace(str_Outcome,i,s_CurrentLayout[i])
+        #increment list
+        if str_Outcome in l_Filters:
+            i_TempIndex = l_Filters.index(str_Outcome)
+        else:
+            i_TempIndex = i_FilterIndex
+            i_FilterIndex += 1
+            l_Filters[i_TempIndex] = str_Outcome
+        l_FilterCounts[i_TempIndex] += 1
     #when down to the final results, the bot will sometimes give up the win. The following code makes sure the answer given is as unhelpful as possible.
-    i_BestResultScore = max(l_FilterResults)
-    l_BestResults = [i for i, j in enumerate(l_FilterResults) if j == i_BestResultScore]
+    i_BestResultScore = max(l_FilterCounts)
+    l_BestResults = [i for i, j in enumerate(l_FilterCounts) if j == i_BestResultScore]
     if len(l_BestResults) > 1:
         l_BlanksLeft = [0]*len(l_BestResults)
         for i in range(len(l_BestResults)):
             i_BlanksLeft = 0
-            for c in l_Combos[l_BestResults[i]]:
+            for c in l_Filters[l_BestResults[i]]:
                 if c == ".":
                     i_BlanksLeft +=1
             l_BlanksLeft[i] = i_BlanksLeft
@@ -451,11 +457,13 @@ def getBestPlay(l_wordlist, s_CurrentLayout,c_CurrentGuess) -> str:
         else:
             i_BestResultindex = l_BestResults[l_MaxBlanks[0]]
     else:
-        i_BestResultindex = l_FilterResults.index(i_BestResultScore)
+        i_BestResultindex = l_FilterCounts.index(i_BestResultScore)
     
-    s_BestResultFilter = l_Combos[i_BestResultindex]
+    s_BestResultFilter = l_Filters[i_BestResultindex]
 
     return s_BestResultFilter
+
+
 
 
 
@@ -465,7 +473,11 @@ load_dict("Wordlists/words.txt",l_WordList)
 input_wordlength = input("Desired word length: ")
 try:
     i_WordLen = int(input_wordlength)
-    l_WordList = optimize_wordlist(l_WordList,i_WordLen,l_BannedChars)
+    l_tempWordList = optimize_wordlist(l_WordList,i_WordLen,l_BannedChars)
+    if len(l_tempWordList) == 0:
+        print("I don't know any words with that length.")
+        raise ValueError
+    l_WordList = l_tempWordList #if it gets here, there's a valid list.
 except: #they didn't enter a proper number
     print("Using any length word.")
     i_minimumWordCount = math.floor(len(l_WordList)/100) #at least 1% of the words have to be that length (would be about 1000 words from the unix wordlist)
@@ -484,7 +496,9 @@ while(len(l_WrongGuesses) < i_MaxErrorCount ):
     c_GuessInput = input("Pick a letter: ").strip().lower()
     for c in c_GuessInput:
         if c not in l_WrongGuesses and c not in s_GivenInfo: #make sure I'm not counting previous errors or correct answers against them.
+            #startTime = time.perf_counter()
             s_bestPlay = getBestPlay(l_WordList, s_GivenInfo, c)
+            #print("getBestPlay took ",time.perf_counter()-startTime,", and responded with",s_bestPlay)
             if s_bestPlay == s_GivenInfo: #the best play was to not let them have that letter
                 l_WrongGuesses.append(c)
             else:
