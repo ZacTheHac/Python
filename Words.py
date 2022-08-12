@@ -55,17 +55,20 @@ def build_dictionary(wordLength,bannedCharacters):
     #Load YAWL by Mendel Leo Cooper
     #load_dict("Wordlists/YAWL.txt",legalWords)
 
+    #Load the known answers used in squareword
+    #load_dict("Wordlists/squareword_SeenAnswers.txt",legalWords)
+
     #load combined file that eliminated 7,506,911 duplicates (~7MB), 571,985 words (Now expanded with YAWL to 578,747)
-    #load_dict("Wordlists/MEGADICT.txt",legalWords)
+    load_dict("Wordlists/MEGADICT.txt",legalWords)
 
     #load wordle answer list (sorted, so it can't be directly used for cheating)
-    load_dict("Wordlists/wordle_answerlist.txt",legalWords)
+    #load_dict("Wordlists/wordle_answerlist.txt",legalWords)
 
     #load wordle complete list (both accepted words and answers)
     #load_dict("Wordlists/wordle_complete.txt",legalWords)
 
     #load reduced wordle answer list (contains only the words after wordle 260 (CLOTH))
-    #load_dict("Wordlists/wordle_reduced_answerlist.txt",legalWords)
+    load_dict("Wordlists/wordle_reduced_answerlist.txt",legalWords)
 
     #print("Optimizing wordlist...")
     legalWords = optimize_wordlist(legalWords,wordLength,bannedCharacters)
@@ -310,12 +313,12 @@ def InterrogateUserForInfo_and_FilterWordlist(hangmanRules,WordleMode) -> None:
             knownPositions = "" #need these assignments or a blank input will keep old values
             neededLetters = "" #need this assignment or the sanity check later will crash if playing by hangman rules
 
-            bannedLetters = input("Enter a list of known non-ocurring letters: ")
+            bannedLetters = input("Enter a list of known non-ocurring letters: ").lower()
             if not hangmanRules:
                 print("Known necessary letters: "+str(unknownPositions))
-                neededLetters = input("Enter necessary letters: ") #unknown positions aren't a thing in hangman
+                neededLetters = input("Enter necessary letters: ").lower() #unknown positions aren't a thing in hangman
 
-            knownPositions = input("Enter known letter positions with \".\" for an unknown place:") #secretly it's just a regex
+            knownPositions = input("Enter known letter positions with \".\" for an unknown place:").lower() #secretly it's just a regex
             if hangmanRules:
                 #read and convert the regex if it's a simple one
                 specialRegexChars = ["\\","^","[","]","$","|","?","*","+","{","}",":","<",">","!","(",")"]
