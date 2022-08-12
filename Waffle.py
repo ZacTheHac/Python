@@ -863,51 +863,56 @@ def GetOnlyOccuranceSwaps(lCurrentState:list, sTarget:str) -> list:
                     lReturnList.append(newSwap)
     return lReturnList
 
+def GetAllSwaps(lCurrentState:list, sTarget:str) -> list:
+    lSwaps = []
+    for i in range(len(lCurrentState)-1):
+        if lCurrentState[i] != sTarget[i] and sTarget[i] != ".":
+            wantedChar = sTarget[i]
+            haveChar = lCurrentState[i]
+            #l_Indexes = []
+            
+            for j in range(i+1,len(lCurrentState)):
+                if lCurrentState[j] == wantedChar and sTarget[j] != wantedChar: #this is an out of place character and it's a character we're looking for
+                    newSwap = [i,j]
+                    newSwapReverse = [j,i]
+                    if not (newSwap in lSwaps or newSwapReverse in lSwaps): #already know this swap
+                        lSwaps.append(newSwap)
+                    #l_Indexes.append(j)
+
+            #for k in range(len(l_Indexes)):
+            #    newSwap = [i,l_Indexes[k]]
+            #    newSwapReverse = [l_Indexes[k],i]
+            #    if not (newSwap in lSwaps or newSwapReverse in lSwaps): #already know this swap
+            #        lSwaps.append(newSwap)
+            #
+            #    if sTarget[l_Indexes[k]] == haveChar: #obvious swap, they belong in each other's spot
+            #        newSwap = [i,l_Indexes[k]]
+            #        newSwapReverse = [l_Indexes[k],i]
+            #        if not (newSwap in lSwaps or newSwapReverse in lSwaps): #already know this swap
+            #            lSwaps.append(newSwap)
+            #    elif sTarget[l_Indexes[k]] == ".":
+            #        #Swap is indeterminate, don't do it yet.
+            #        pass
+            #    elif len(l_Indexes) == 1: #or (k == len(l_Indexes)-1):
+            #        #kinda have to make this swap. it's the only possible option, or we've tried all the others.
+            #        newSwap = [i,l_Indexes[k]]
+            #        newSwapReverse = [l_Indexes[k],i]
+            #        if not (newSwap in lSwaps or newSwapReverse in lSwaps): #already know this swap
+            #            lSwaps.append(newSwap)
+    return lSwaps
+
 def GetPossibleSwaps_NoBoardState(lCurrentState, sTarget) -> list:
-    for Loop in range(2):
-        lReturnList = [] #[fromIndex,ToIndex,NewBoardState] for each index
-        iOutOfPlace = 0
-        for i in range(len(lCurrentState)):
-                if lCurrentState[i] != sTarget[i] and sTarget[i] != ".":
-                    iOutOfPlace += 1
-                    wantedChar = sTarget[i]
-                    haveChar = lCurrentState[i]
-                    l_IndexesOfWantedChar = []
-                    lTempList = [] #only holds current state swaps. Useful if we're only looking for perfects
-                    PerfectOnly = False
-                    #get all possibilities
-                    for j in range(len(lCurrentState)):
-                        if lCurrentState[j] == wantedChar and sTarget[j] != wantedChar: #this is an out of place character and it's a character we're looking for
-                            l_IndexesOfWantedChar.append(j)
-                    for k in range(len(l_IndexesOfWantedChar)):
-                        indexOfWanted = l_IndexesOfWantedChar[k]
-                        if sTarget[indexOfWanted] != ".":
-                            if sTarget[indexOfWanted] == haveChar: #obvious swap, they belong in each other's spot
-                                if PerfectOnly == False:
-                                    lTempList = [] #clear out all the non-perfect swaps
-                                    PerfectOnly = True
-                                newSwap = [i,indexOfWanted]
-                                newSwapReverse = [indexOfWanted,i]
-                                if not (newSwap in lTempList or newSwapReverse in lTempList or newSwap in lReturnList or newSwapReverse in lReturnList): #already know this swap
-                                    lTempList.append(newSwap)
-                                else:
-                                    pass
-                            elif PerfectOnly == False:
-                                if len(l_IndexesOfWantedChar) == 1 or Loop == 1:
-                                    newSwap = [i,indexOfWanted]
-                                    newSwapReverse = [indexOfWanted,i]
-                                    if not (newSwap in lTempList or newSwapReverse in lTempList or newSwap in lReturnList or newSwapReverse in lReturnList): #already know this swap
-                                        lTempList.append(newSwap)
-                                    else:
-                                        pass
-                    lReturnList.extend(lTempList)
-        if len(lReturnList) > 0: #if it didn't find any perfect swaps, we'll loop again and find all swaps.
-            return lReturnList
-        else:
-            #print("No good swaps found. Gotta be dirty.")
-            #or I just return anyways? no, imperfect swaps are needed in all solutions.
-            #return lReturnList
-            pass
+    #check for perfect swaps, if none, find last resort swaps, if none, then you can feed them garbage.
+    lReturnList = [] #[fromIndex,ToIndex] for each index
+    lReturnList = GetPerfectSwaps(lCurrentState, sTarget)
+    if len(lReturnList) > 0:
+        return lReturnList
+    #only get here if there's no perfect swaps left
+    lReturnList = GetOnlyOccuranceSwaps(lCurrentState, sTarget)
+    if len(lReturnList) > 0:
+        return lReturnList
+    #Finally: we must acept our fate and return any swap that works
+    lReturnList = GetAllSwaps(lCurrentState, sTarget)
     return lReturnList
 
 def BFS_SP(graph, start, goal):
