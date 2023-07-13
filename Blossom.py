@@ -107,11 +107,44 @@ def GetAndSortByScore(listWordList:list[str],listAllLetters:list[str],charBonusL
     #key=lambda row: (row[1] , row[0]) for reverse sort alphabetically, too.
     return listWordAndScore
 
+def GroupByBestBonusLetter(listWordList:list[str],listBonusableLetters:list[str]) -> list[list[list[str,int]]]:
+    listBestWordsByLetter = [[] for i in range(len(listBonusableLetters))]
+    intScoreNBDDistance = 9.5 #this number is a delicate balancing act. examples of tests:
+    #Blossom O-NLKSER (july 12, 2023): without grouping: 432, with grouping: NBD=2:433(+1), NBD=5:436(+4), NBD=9:444(+12), NBD=10:444(+12), NBD=11:439(+7)
+        #sweet spot may lie between 5 and 11, as the linear relationship didn't follow to 11, and 10 more points is a significant amount to deviate by. May be an issue with the second half of the game, that bonus letter may NEVER show up again
+        #so high value words are lost because they were kept for something not meant to be
+        #large NBD values can allow them to still show up, but that also means that they might be used up before they can be used to their full potential.
+        #or we could simply be seeing diminishing returns, but 11 still resulted in the highest score, so it may be a perfectly fine value
+        #updated with a NBD of 10 results in the highest score yet, meaning we had passed to apex with 11.
+    for strWord in listWordList:
+        listScoresByBonusLetter = []
+        for i in range(len(listBonusableLetters)):
+            charLetter = listBonusableLetters[i]
+            listScoresByBonusLetter.append(PointsForWord(strWord,listBonusableLetters,charLetter)) #technically I should feed in a list of all letters, including the center, but the function SHOULD behave identically, as all words will have the center letter, and it just wants the letter list to find a pangram
+        #have a list of all the scores each word can give. Find out if one letter is much larger than the others. If it is, only add the word to that/those list(s). if not, add it to all.
+        intMaxScore = max(listScoresByBonusLetter)
+        intMinScore = min(listScoresByBonusLetter)
+        if (intMaxScore-intMinScore) > intScoreNBDDistance:
+            #have to find out the best words.
+            for i in range(len(listBonusableLetters)):
+                if(intMaxScore - listScoresByBonusLetter[i])<intScoreNBDDistance:
+                    listBestWordsByLetter[i].append([strWord,listScoresByBonusLetter[i]])
+        else:
+            #score is close enough. Just put it in all of them.
+            for i in range(len(listBonusableLetters)):
+                listBestWordsByLetter[i].append([strWord,listScoresByBonusLetter[i]])
+    #all the words are in apropriate lists. Now to just sort the lists.
+    for i in range(len(listBonusableLetters)):
+        listBestWordsByLetter[i].sort(key=lambda row: (row[1]),reverse=True)
+    return listBestWordsByLetter #it's very important to ACTUALLY RETURN THE THING WE MADE.
 
 #main code block
 def main():
     strCenterLetter = input("What is the center (required) letter?: ").lower()
     strOtherLetters = input("What are the rest of the letters?: ").lower()
+    boolSort = bool(input("Automatically separate words into their top value bonus letters? "))
+    boolAutoDelete = bool(input("Automatically delete top values once shown? "))
+    listBonusableLetters = [*strOtherLetters]
     listAllowedCharacters = [*strOtherLetters]
     listAllowedCharacters.append(strCenterLetter)
 
@@ -130,13 +163,43 @@ def main():
     #sort by score
     #now when given a bonus letter we can create a new list of values, starting with the first 100 or so top scoring words.
 
+    listGroupedList = [] #have to make sure it doesn't go out of scope too soon.
+    if boolSort:
+        listGroupedList = GroupByBestBonusLetter(listWords,listBonusableLetters)
+    
+
     while True: #just run forever. The user can kill it when they're done.
         print("\n\n")
         strBonusLetter = input("What is the current bonus letter? ")
         #calculate all the values of the words now, sort by the top scores and show the top 20
-        listWordValues = GetAndSortByScore(listWords,listAllowedCharacters,strBonusLetter)
-        for i in range(min(20,len(listWordValues))):
+        listWordValues = []
+        if boolSort:
+            try:
+                intIndexOfLetter = listBonusableLetters.index(strBonusLetter)
+                #print("That is number",intIndexOfLetter+1)
+                listWordValues = listGroupedList[intIndexOfLetter]
+            except:
+                print("I don't see that letter in the initial letters you gave me.")
+                continue
+        else:
+            listWordValues = GetAndSortByScore(listWords,listAllowedCharacters,strBonusLetter)
+        for i in range(min(10,len(listWordValues))):
             print(listWordValues[i][0],"- worth ",listWordValues[i][1],"points")
+        
+        if boolAutoDelete:
+            #remove the top word from the list.
+            strTopWord = listWordValues[0][0]
+            if boolSort:
+                #find in all lists and eliminate it.
+                for i in range(len(listBonusableLetters)):
+                    intListLength = len(listGroupedList[i])
+                    for j in range(intListLength):
+                        if listGroupedList[i][j][0] == strTopWord:
+                            del(listGroupedList[i][j]) #delete the whole row
+                            #intListLength-=1 #we made the list shorter, so we need to compensate for that.
+                            break #we found the word in this list, it shouldn't have any dupes!
+            else:
+                listWords.remove(strTopWord)
 
 if __name__ == "__main__":
     main()
