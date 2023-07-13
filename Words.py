@@ -1,3 +1,4 @@
+import cProfile
 import io
 import string
 import re
@@ -59,16 +60,19 @@ def build_dictionary(wordLength,bannedCharacters):
     #load_dict("Wordlists/squareword_SeenAnswers.txt",legalWords)
 
     #load combined file that eliminated 7,506,911 duplicates (~7MB), 571,985 words (Now expanded with YAWL to 578,747)
-    load_dict("Wordlists/MEGADICT.txt",legalWords)
+    #load_dict("Wordlists/MEGADICT.txt",legalWords)
 
     #load wordle answer list (sorted, so it can't be directly used for cheating)
-    #load_dict("Wordlists/wordle_answerlist.txt",legalWords)
+    load_dict("Wordlists/wordle_answerlist.txt",legalWords)
 
     #load wordle complete list (both accepted words and answers)
     #load_dict("Wordlists/wordle_complete.txt",legalWords)
 
     #load reduced wordle answer list (contains only the words after wordle 260 (CLOTH))
-    load_dict("Wordlists/wordle_reduced_answerlist.txt",legalWords)
+    #load_dict("Wordlists/wordle_reduced_answerlist.txt",legalWords)
+
+    #load list of names
+    #load_dict("Wordlists/names.txt",legalWords)
 
     #print("Optimizing wordlist...")
     legalWords = optimize_wordlist(legalWords,wordLength,bannedCharacters)
@@ -116,7 +120,7 @@ def reduce_Wordlist(l_WordList, l_bannedChars = [], l_WantedLetters = [], s_Rege
     for word in l_WordList:
         if not any(bannedCharacter in l_bannedChars for bannedCharacter in word): #no banned letters
             if StrContainsAllLettersWithCount(word,l_WantedLetters): #all(needLetter in word for needLetter in neededLetters): #contains the letters we need
-                if re.search(s_Regex, word):
+                if re.search(s_Regex, word) is not None:
                     newWords.append(word)
     return newWords
 
@@ -314,6 +318,9 @@ def InterrogateUserForInfo_and_FilterWordlist(hangmanRules,WordleMode) -> None:
             neededLetters = "" #need this assignment or the sanity check later will crash if playing by hangman rules
 
             bannedLetters = input("Enter a list of known non-ocurring letters: ").lower()
+            if bannedLetters == "printout" or bannedLetters == "printall" or bannedLetters == "print" or bannedLetters == "listall":
+                    print(legalWords)
+                    bannedLetters = input("Now, enter a list of known non-ocurring letters: ").lower()
             if not hangmanRules:
                 print("Known necessary letters: "+str(unknownPositions))
                 neededLetters = input("Enter necessary letters: ").lower() #unknown positions aren't a thing in hangman
@@ -801,10 +808,10 @@ def FindOptimalPlay(l_WordList, b_HardMode = True, l_WholeWordList = [], b_Noisy
     l_PossiblePlays = []
     l_PossiblePlays.extend(l_WordList) #Have to do it like this or it modifies the answerlist for SOME REASON?! Point is: I want the answers to be first if they work
     if not b_HardMode:
-        if b_Noisy:
-            l_PossiblePlays.extend(l_WholeWordList)
-            #if we're looking at whole debug stuff, we probably want the best no matter what.
-        else:
+        #if b_Noisy:
+        #    l_PossiblePlays.extend(l_WholeWordList)
+        #    #if we're looking at whole debug stuff, we probably want the best no matter what.
+        #else:
             l_PossiblePlays.extend(reduce_Wordlist(l_WholeWordList, [], mostCommonLetters(1, 1, len(l_WordList), l_WordList, None, None, None, False), str("")))
             #often this would cause lockups that lasted almost a minute. By trimming down the list we search by requiring it have the most popular letter, we can still get great results in 1/4 the time.
             #however, if the answers are possible solutions, we want them on there first. Only relevant if they're providing perfect scores, but it happens enough.
@@ -871,9 +878,9 @@ def FindOptimalPlay(l_WordList, b_HardMode = True, l_WholeWordList = [], b_Noisy
                 l_MinAverageList.append(l_PossiblePlays[l_IndexesOfScore[i]])
             f_averageAverageScore += l_AverageScore[l_IndexesOfScore[i]]
         f_averageAverageScore = f_averageAverageScore/len(l_IndexesOfScore)
-        print("With an average of "+"{:.3f}".format(f_averageAverageScore)+" words left.")
-        print("For the words:          "+str(l_Output))
-        print("But a minimum average of "+"{:.3f}".format(f_MinimumAverage)+" words left")
+        #print("With an average of "+"{:.3f}".format(f_averageAverageScore)+" words left.")
+        #print("For the words:          "+str(l_Output))
+        print("With a minimum average of "+"{:.3f}".format(f_MinimumAverage)+" words left")
         print("For the words:          "+str(l_MinAverageList))
 
     
@@ -989,6 +996,7 @@ while len(legalWords) > 1:
     genStats(legalWords, wordsContainingLetters, None, False) #the "None" could be replaced with "letterStats" but honestly: I never ended up using it. So processing it is a waste of time.
     print("\n\n\n")
     print(str(len(legalWords))+" words remaining.")
+    #cProfile.run("FindOptimalPlay(legalWords,False,WholeWordList)")
     if len(legalWords)<=75:
         print("Remaining words:")
         for word in legalWords:
