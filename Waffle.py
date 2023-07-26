@@ -628,7 +628,7 @@ def SolutionAsString(l_HorizLetters:list[str],l_VertLetters:list[str]) -> str:
                 sOutput += l_VertLetters[i][Row]
     return sOutput
 
-def GetPerfectSwaps(lCurrentState:list[str], sTarget:str) -> list:
+def GetPerfectSwaps(lCurrentState:list[str], sTarget:str) -> list[int,int]:
     lReturnList = []
     for i in range(len(lCurrentState)-1): #no point in checking the last one, it was already checked against everyone else
         if lCurrentState[i] != sTarget[i] and sTarget[i] != ".":
@@ -644,7 +644,7 @@ def GetPerfectSwaps(lCurrentState:list[str], sTarget:str) -> list:
                                 lReturnList.append(newSwap)
     return lReturnList
 
-def GetOnlyOccuranceSwaps(lCurrentState:list[str], sTarget:str) -> list:
+def GetOnlyOccuranceSwaps(lCurrentState:list[str], sTarget:str) -> list[int,int]:
     #Returns a list of swaps that only one letter of that kind is movable
     lReturnList = []
     lOutOfPlaceLetters = []
@@ -671,7 +671,7 @@ def GetOnlyOccuranceSwaps(lCurrentState:list[str], sTarget:str) -> list:
                     lReturnList.append(newSwap)
     return lReturnList
 
-def GetAllSwaps(lCurrentState:list[str], sTarget:str) -> list:
+def GetAllSwaps(lCurrentState:list[str], sTarget:str) -> list[int,int]:
     lSwaps = []
     for i in range(len(lCurrentState)-1):
         if lCurrentState[i] != sTarget[i] and sTarget[i] != ".":
@@ -709,7 +709,7 @@ def GetAllSwaps(lCurrentState:list[str], sTarget:str) -> list:
             #            lSwaps.append(newSwap)
     return lSwaps
 
-def GetPossibleSwaps_NoBoardState(lCurrentState:list[str], sTarget:str) -> list:
+def GetPossibleSwaps_NoBoardState(lCurrentState:list[str], sTarget:str) -> list[int,int]:
     #check for perfect swaps, if none, find last resort swaps, if none, then you can feed them garbage.
     lReturnList = [] #[fromIndex,ToIndex] for each index
     lReturnList = GetPerfectSwaps(lCurrentState, sTarget)
@@ -763,7 +763,7 @@ def BFS_SP(graph:dict[int,list], start:int, goal:int) ->list[int]:
     # are not connected
     return None
 
-def GetMinimumSwaps_graph_NBS(sLetters:str,l_HorizLetters:list[str],l_VertLetters:list[str]) -> list:
+def GetMinimumSwaps_graph_NBS(sLetters:str,l_HorizLetters:list[str],l_VertLetters:list[str]) -> list[int,int,str,int,int,str]:
     #have a set representing the connections
     #have a set of arrays holding the swaps, the current total cost, and the array setup at the moment.
     #if the array setup isn't the answer, add more options to it
@@ -922,7 +922,7 @@ def GetMinimumSwaps_graph_NBS(sLetters:str,l_HorizLetters:list[str],l_VertLetter
         LastState = solution[i]
     return SolutionSwaps
 
-def SmartSolve(sLetters:str,l_HorizLetters:list,l_VertLetters:list) -> list:
+def SmartSolve(sLetters:str,l_HorizLetters:list,l_VertLetters:list) -> list[int,int,str,int,int,str]:
     #Iterative solving:
     #do perfect swaps, do neccesary swaps, check for perfect swaps again, THEN feed it to the graph solver
 
