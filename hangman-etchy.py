@@ -111,8 +111,9 @@ def display_hangman(s_knownInfo,l_wrongGuesses, i_MaxAllowedErrors):
     f_errorPercent = len(l_wrongGuesses)/i_MaxAllowedErrors
     drawGallows(f_errorPercent)
 
-    s_knownInfo = s_knownInfo.replace(".","_ ")
-    print(s_knownInfo)
+    s_knownInfo = s_knownInfo.replace(".","_")
+    print(" ".join(s_knownInfo)) #adds spaces between each letter
+    #print(s_knownInfo)
 
     s_wrongGuesses = str(l_wrongGuesses)
     s_wrongGuesses = s_wrongGuesses[1:len(s_wrongGuesses)-1] #use the default list to string conversion and cut off the []
@@ -469,6 +470,7 @@ def getBestPlay(l_wordlist, s_CurrentLayout,c_CurrentGuess) -> str:
 
 #program
 load_dict("Wordlists/words.txt",l_WordList)
+load_dict("Wordlists/wordle_answerlist.txt",l_WordList)
 
 input_wordlength = input("Desired word length: ")
 try:
