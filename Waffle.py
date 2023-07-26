@@ -22,13 +22,13 @@ l_AllKnownLetters = []
 l_AllWords = []
 
 #functions block
-def load_dict(file,StorageList):
+def load_dict(file:str,StorageList:list[str]):
     fileDict=io.open(file, mode="r", encoding="utf-8")
     dictionary = fileDict.readlines()
     dictsize = int(len(dictionary))
     StorageList += dictionary
 
-def build_dictionary(wordLength,bannedCharacters):
+def build_dictionary(wordLength:int,bannedCharacters:list[str]):
     global l_AllWords
 
     #Load YAWL by Mendel Leo Cooper
@@ -39,9 +39,9 @@ def build_dictionary(wordLength,bannedCharacters):
     print("Answer list Loaded.")
     print("("+str(len(l_AllWords))+" words)")
 
-def optimize_wordlist(wordList,wordLength,bannedCharacters) -> list:
+def optimize_wordlist(wordList:list[str],wordLength:int,bannedCharacters:list[str]) -> list[str]:
     """
-    Returns all words in \"wordList\" that are not \"wordLength\" characters long or contains any of \"bannedCharacters\"\n
+    Returns all words in \"wordList\" that are \"wordLength\" characters long and do not contain any character in \"bannedCharacters\"\n
     The new list is deduplicated and sorted alphabetically.\n"""
 
     newWords = []
@@ -55,7 +55,7 @@ def optimize_wordlist(wordList,wordLength,bannedCharacters) -> list:
     newWords.sort() #why not have it sorted, too?
     return newWords
 
-def reduce_Wordlist(l_WordList, l_bannedChars = [], l_WantedLetters = [], s_Regex = "") -> list:
+def reduce_Wordlist(l_WordList:list[str], l_bannedChars:list[str] = [], l_WantedLetters:list[str] = [], s_Regex:str = "") -> list[str]:
     """Takes in a list of words, and returns only the words that fit certain criteria"""
     newWords = []
     for word in l_WordList:
@@ -65,7 +65,7 @@ def reduce_Wordlist(l_WordList, l_bannedChars = [], l_WantedLetters = [], s_Rege
                     newWords.append(word)
     return newWords
 
-def StrContainsAllLettersWithCount(s_Word, l_Letters) -> bool:
+def StrContainsAllLettersWithCount(s_Word:str, l_Letters:list[str]) -> bool:
     #quick check to skip the hard part if I don't need to.
     #Turns out this check is slower in most cases
     #if not all(needLetter in s_word for needLetter in l_letters):
@@ -86,7 +86,7 @@ def DeepExtend(l_OrigList:list, l_Extension:list) -> list:
     l_OrigList.extend(tempCopy)
     return l_OrigList
 
-def AreWeDoneYet(l_HorizontalWords, l_VerticalWords) -> bool:
+def AreWeDoneYet(l_HorizontalWords:list[str], l_VerticalWords:list[str]) -> bool:
     for i in range(len(l_HorizontalWords)):
         if len(l_HorizontalWords[i]) > 1:
             return False
@@ -95,7 +95,7 @@ def AreWeDoneYet(l_HorizontalWords, l_VerticalWords) -> bool:
             return False
     return True
 
-def DisplayWaffle(l_HorizKnownLetters,l_VertKnownLetters) -> None:
+def DisplayWaffle(l_HorizKnownLetters:list[str],l_VertKnownLetters:list[str]) -> None:
     iWordLen = len(l_HorizKnownLetters[0])
     iNumberOfWords = len(l_HorizKnownLetters)
     for Row in range(iWordLen):
@@ -316,7 +316,7 @@ def SetLetters(sLetters:str,sColors:str,lHorizLetters:list,lVertLetters:list,lUn
         else:
             lUnhomed.append(sLetters[i])
 
-def PossibleFunkyDingos(sLetters,sColors,iWordLen, iNumOfWords, xCoord, yCoord, FindChar = None) -> list:
+def PossibleFunkyDingos(sLetters:str,sColors:str,iWordLen:int, iNumOfWords:int, xCoord:int, yCoord:int, FindChar:str = None) -> list[str]:
     """Takes in the current board state, takes an index in the boardstate to work on, and an optional character to exclusively search for.\n
     Will then return a list of all possible funkyDingo situations for that crossroads"""
     #now: if the letter appears in both the vertical and horizontal, and both are yellow, we MIGHT have a funky dingo, and one of those letters should be added to "unhomed"
@@ -594,7 +594,7 @@ def ReduceByPlaying_Extensible(sLetters:str,l_HorizontalAnswers:list,l_VerticalA
         DeepExtend(l_VerticalAnswers[i],lVertAnsReduced[i])
     SetKnownLetters(l_HorizontalAnswers,l_VerticalAnswers, lHorizLetters, lVertLetters)
 
-def SetKnownLetters(l_HorizontalAnswers, l_VerticalAnswers, lHorizLetters, lVertLetters):
+def SetKnownLetters(l_HorizontalAnswers:list[str], l_VerticalAnswers:list[str], lHorizLetters:list[str], lVertLetters:list[str]):
     iNumOfWords = len(l_HorizontalAnswers)
     iWordLen = len(l_HorizontalAnswers[0][0])
     for WordListIndex in range(iNumOfWords):
@@ -615,7 +615,7 @@ def SetKnownLetters(l_HorizontalAnswers, l_VerticalAnswers, lHorizLetters, lVert
                 if lAffectedWords[1][0] != None:
                     lVertLetters[lAffectedWords[1][0]][lAffectedWords[1][1]] = l_VerticalAnswers[WordListIndex][0][y]
 
-def SolutionAsString(l_HorizLetters,l_VertLetters) -> str:
+def SolutionAsString(l_HorizLetters:list[str],l_VertLetters:list[str]) -> str:
     sOutput = ""
     iWordLen = len(l_HorizLetters[0])
     iNumOfWords = len(l_HorizLetters)
@@ -628,7 +628,7 @@ def SolutionAsString(l_HorizLetters,l_VertLetters) -> str:
                 sOutput += l_VertLetters[i][Row]
     return sOutput
 
-def GetPerfectSwaps(lCurrentState, sTarget) -> list:
+def GetPerfectSwaps(lCurrentState:list[str], sTarget:str) -> list:
     lReturnList = []
     for i in range(len(lCurrentState)-1): #no point in checking the last one, it was already checked against everyone else
         if lCurrentState[i] != sTarget[i] and sTarget[i] != ".":
@@ -644,7 +644,7 @@ def GetPerfectSwaps(lCurrentState, sTarget) -> list:
                                 lReturnList.append(newSwap)
     return lReturnList
 
-def GetOnlyOccuranceSwaps(lCurrentState:list, sTarget:str) -> list:
+def GetOnlyOccuranceSwaps(lCurrentState:list[str], sTarget:str) -> list:
     #Returns a list of swaps that only one letter of that kind is movable
     lReturnList = []
     lOutOfPlaceLetters = []
@@ -671,7 +671,7 @@ def GetOnlyOccuranceSwaps(lCurrentState:list, sTarget:str) -> list:
                     lReturnList.append(newSwap)
     return lReturnList
 
-def GetAllSwaps(lCurrentState:list, sTarget:str) -> list:
+def GetAllSwaps(lCurrentState:list[str], sTarget:str) -> list:
     lSwaps = []
     for i in range(len(lCurrentState)-1):
         if lCurrentState[i] != sTarget[i] and sTarget[i] != ".":
@@ -709,7 +709,7 @@ def GetAllSwaps(lCurrentState:list, sTarget:str) -> list:
             #            lSwaps.append(newSwap)
     return lSwaps
 
-def GetPossibleSwaps_NoBoardState(lCurrentState, sTarget) -> list:
+def GetPossibleSwaps_NoBoardState(lCurrentState:list[str], sTarget:str) -> list:
     #check for perfect swaps, if none, find last resort swaps, if none, then you can feed them garbage.
     lReturnList = [] #[fromIndex,ToIndex] for each index
     lReturnList = GetPerfectSwaps(lCurrentState, sTarget)
@@ -723,7 +723,7 @@ def GetPossibleSwaps_NoBoardState(lCurrentState, sTarget) -> list:
     lReturnList = GetAllSwaps(lCurrentState, sTarget)
     return lReturnList
 
-def BFS_SP(graph, start, goal):
+def BFS_SP(graph:dict[int,list], start:int, goal:int) ->list[int]:
     explored = []
      
     # Queue for traversing the
@@ -763,7 +763,7 @@ def BFS_SP(graph, start, goal):
     # are not connected
     return None
 
-def GetMinimumSwaps_graph_NBS(sLetters,l_HorizLetters,l_VertLetters) -> list:
+def GetMinimumSwaps_graph_NBS(sLetters:str,l_HorizLetters:list[str],l_VertLetters:list[str]) -> list:
     #have a set representing the connections
     #have a set of arrays holding the swaps, the current total cost, and the array setup at the moment.
     #if the array setup isn't the answer, add more options to it
@@ -1131,7 +1131,7 @@ if __name__ == '__main__':
         else:
             print(str(len(l_Swaps))+" swaps proposed:")
         for i in range(len(l_Swaps)):
-            print("Swap #"+str(i+1)+": \""+str(l_Swaps[i][2])+"\"("+str(l_Swaps[i][0])+","+str(l_Swaps[i][1])+") to \""+str(l_Swaps[i][5])+"\"("+str(l_Swaps[i][3])+","+str(l_Swaps[i][4])+")")
+            print("Swap #"+str(i+1)+": \""+str(l_Swaps[i][2])+"\"("+str(l_Swaps[i][0]+1)+","+str(l_Swaps[i][1]+1)+") to \""+str(l_Swaps[i][5])+"\"("+str(l_Swaps[i][3]+1)+","+str(l_Swaps[i][4]+1)+")")
 
         for y in range(wordLen):
             for x in range(wordLen):
@@ -1168,6 +1168,12 @@ if __name__ == '__main__':
 #101
 #s_Waffle = "gbpptodennisewrasnerd"
 #s_Colors = "g...gyyyy.g.g...gyg.g"
+#118 (first I did)
+#s_Waffle = "tcteebhrcetsotahoeolr"
+#s_Colors = "g...g.y.ygg....ygyy.g"
+#121
+#s_Waffle = "peetdruaattloepvlaara"
+#s_Colors = "g.y.g...y.gy....gg.yg"
 #127
 #s_Waffle = "vueieteiiimlivasdeotr"
 #s_Colors = "gy..g...y.g..y.ygg.yg"
@@ -1198,6 +1204,9 @@ if __name__ == '__main__':
 #150
 #s_Waffle = "sidrntttaroaaannfcofy"
 #s_Colors = "gy..g.y.gyg.y..gg.y.g"
+#154
+#s_Waffle = "pslaerooaucluuekasael"
+#s_Colors = "gyyyg....ygy..g.g.y.g"
 #159
 #s_Waffle = "cvsdeaeaelphhmaftrsle"
 #s_Colors = "g.y.gyyy.ggg..y.g.y.g"
@@ -1237,7 +1246,54 @@ if __name__ == '__main__':
 #221
 #s_Waffle = "apemthspeoknraletnade"
 #s_Colors = "ggy.g...yygy..gyg.y.g"
-
+#222 (40% failure rate! - https://twitter.com/thatwafflegame/status/1565427900173672454 )
+#s_Waffle = "singtraeeotolmfrlplso"
+#s_Colors = "g.y.g...y.g.yyyyg...g"
+#231
+#s_Waffle = "mtottplaloolssidhrroy"
+#s_Colors = "g...gyyg.gg.y...g.yyg"
+#300
+#s_Waffle = "agdrmlrueianeuloeibrr"
+#s_Colors = "g.y.g.y..ygy.g.gg.y.g"
+#335
+#s_Waffle = "dbjurmgoerneafimgouey"
+#s_Colors = "g...g.ygy.g.y.ygg.y.g"
+#537
+#s_Waffle = "nouddycioastlamoriral"
+#s_Colors = "ggy.g...y.g.yyyyg..gg"
+#538
+#s_Waffle = "crdegdtlieirireirnoly"
+#s_Colors = "g.y.gyyyyygyy...g.y.g"
+#540
+#s_Waffle = "mnlodlserainhugorbwuy"
+#s_Colors = "gy.yg.g.y.g.y.y.gy.yg"
+#541
+#s_Waffle = "dratmuidRTIITTERoeepa"
+#s_Colors = "g.yyg..yyyg..g..g.gyg"
+#542
+#s_Waffle = "rdnnneeneianiisangety"
+#s_Colors = "g.y.gy.y.ygy.y.yg.g.g"
+#543
+#s_Waffle = "paueoivgwnolhnlaeknnt"
+#s_Colors = "gy..g..y.ygyyg..g..gg"
+#544
+#s_Waffle = "zsyeyrokesatipenalbbs"
+#s_Colors = "gyyygygyy.g.y...g.y.g"
+#545
+#s_Waffle = "daeinrtdcnepmecihigee"
+#s_Colors = "gy.gg...y.gy.y.yg.yyg"
+#547
+#s_Waffle = "bneyhacmunicretettsha"
+#s_Colors = "g.y.gyy..gg..yyygy.yg"
+#548
+#s_Waffle = "bzilerrtaratsaoalpeir"
+#s_Colors = "gy.yg.y.yygyy...g.y.g"
+#549
+#s_Waffle = "SYIKFNEWLVOLAIFELRRYR"
+#s_Colors = "g.gyg...y.g..y.gg.yyg"
+#550
+#s_Waffle = "cneocalalabemyioprmlr"
+#s_Colors = "gy.ygyyyyygyy...g...g"
 
 #s_Waffle = "peetdruaattloepvlaara"
 #s_Colors = "g.y.g...y.gy....gg.yg"
@@ -1245,6 +1301,8 @@ if __name__ == '__main__':
 #s_Colors = "g.y.g...ggggg.y.ggggg"
 
 #deluxe waffle: wordlen = 7, numofwords = 4
+#s_Waffle = "dgentxrersottpaelssemlilosanenerlleecetd"
+#s_Colors = "y.g.g.yyy..g.g.gygy...gygyg.g....yyg.gyy"
 #s_Waffle = "sivroybdoctmsbotgrnsersdaiiserouuieesesu"
 #s_Colors = "yyg.g.y....gygyg.g...ygyg.gyg..yyy.gyg.."
 #Deluxe #5:
@@ -1253,7 +1311,7 @@ if __name__ == '__main__':
 #Deluxe #6:
 #s_Waffle = "cespnbsanesaeoatddsanirilrapemlenstdgeee"
 #s_Colors = "yyg.gyyy..ygyg.gyg....g.g.g.gy..yy.g.g.y"
-#Deluxe #9:
+#Deluxe #9: (56% failure rate: https://twitter.com/thatwafflegame/status/1554936152184000518?s=20 )
 #s_Waffle = "ceninraitcuaatretsacestfrminespiuaelired"
 #s_Colors = "yygyg.yy...g.ggg.g..yyg.ggg.g......gyg.."
     #perfect swaps: cininraitcuaatretsacestfrminespeuaelired / ygg.g.yy...g.ggg.g..yyg.ggg.g..g...gyg..
@@ -1270,3 +1328,79 @@ if __name__ == '__main__':
 #Deluxe #14:
 #s_Waffle = "twsruldrlrferumiiedelelngroskueaabeevmrg"
 #s_Colors = "y.gyg.y.yy.g.g.g.gy..yg.gyg.gy..y.yg.gy."
+#Deluxe #15:
+#s_Waffle = "maoxeyvuopsertvattvdsrerooiceartyrnrtnbn"
+#s_Colors = "..g.g.y.y..gyg.g.g.ggyg.g.g.g...yyygyg.."
+#Deluxe #25:
+#s_Waffle = "mirtieibpnlatglleceanapsteeetuiexdnalsrn"
+#s_Colors = "y.gygyy....g.g.gygygg.g.g.g.g...yy.gyg.."
+#Deluxe #30:
+#s_Waffle = "mllnpoelygyibpliadeoeoaeettlrnearaidsrrc"
+#s_Colors = "..g.gyy...yg.ggg.gy.yyg.ggg.gy.yy..g.g.."
+#Deluxe #59:
+#s_Waffle = "uotsntidnxdelpvadnoprsenieeeteaeghlgetis"
+#s_Colors = "y.g.gy..y.ygyg.g.g.gg.gyg.g.g..y.y.gygyy"
+#Deluxe #60:
+#s_Waffle = "memlidnvrcssbspeuteionaciateraerdvneoaci"
+#s_Colors = ".yg.g.y....g.gggygyy..g.ggg.gy.yy..g.g.."
+#Deluxe #61:
+#s_Waffle = "negeapareordiippddafpelmterdlurateadrlte"
+#s_Colors = "y.g.g...y.yg.ggg.gy.yyg.ggg.gyyyyy.gyg.y"
+
+#Waffle royale - new: 6 total words, 2 are 7 letters long, 4 are 5 letters. it is the center words that are extra long.
+#shape:
+#      1
+#  2 3 4 5 6
+#  7   8   9
+#0 1 2 3 4 5 6
+#  7   8   9
+#  0 1 2 3 4
+#      5
+
+#Royale 67
+#s_Waffle = "idaeiogicigupacrnnglossee"
+#s_Colors = "gg..yg.yyyy.g.y..y.g.y.gg"
+#Royale 68 2023-07-17
+#s_Waffle = "ealvissgumhiumdsphiereltg"
+#s_Colors = "???" (5 green, 7 yellow)
+#	"solution": "###D####AMISS##M#V#I#UPSURGE#L#L#H##EIGHT####E###",
+#	"words": [
+#		"AMISS",
+#		"AMPLE",
+#		"UPSURGE",
+#		"DIVULGE",
+#		"EIGHT",
+#		"SIGHT"
+#	],
+#Royale 69 (nice) (2023-07-18)
+#s_Waffle = "absorwieuaomdrelbetnayeyn"
+#s_Colors = "gg.y.gyy.y...yy....g..ygg"
+#Royale 71
+#s_Waffle = "bsgsueetaahrurtodfeptsmsd"
+#s_Colors = "gg.yyg...yyyg.y....g.y.gg"
+#Royale 72
+#s_Waffle = "lfnlxdirewgetehaioitneeli"
+#s_Colors = ".g..yg..y..ygyy....gyy.gy"
+#Royale 73
+#s_Waffle = "safehgedmremndorgsieeboew"
+#s_Colors = "gg.y.gy..yy..y..y..g..ygg"
+#Royale 74
+#s_Waffle = "psjvcenuaurniftiimneoutig"
+#s_Colors = "gg.y.g.....yyyyyy..g.y.gg"
+#Royale 75
+#s_Waffle = "eobninlrnneotaiiaamegdbyn"
+#s_Colors = "gg...g..yy..gyy....g.yygg"
+#Royale 76
+#s_Waffle = "erieitototbaloltehamtlsys"
+#s_Colors = ???
+#	"solution": "###A####ROBOT##E#O#E#TALLEST#L#I#T##MISTY####H###",
+#	"words": [
+#		"ROBOT",
+#		"REALM",
+#		"TALLEST",
+#		"ABOLISH",
+#		"MISTY",
+#		"TESTY"
+#	],
+#	"green": 7,
+#	"yellow": 7,
