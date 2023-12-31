@@ -11,8 +11,8 @@ import time
 
 #hardcoded variables
 bannedChars = ["'","Å","â","ä","á","å","ç","é","è","ê","í","ñ","ó","ô","ö","ü","û","-"," "]
-wordLen = 5
-NumberOfWords = 3
+iWordLen = 5
+iNumberOfWords = 3
 
 
 #global variables
@@ -33,6 +33,9 @@ def build_dictionary(wordLength:int,bannedCharacters:list[str]):
 
     #Load YAWL by Mendel Leo Cooper
     load_dict("Wordlists/YAWL.txt",l_AllWords)
+
+    #Load MEGADICT
+    #load_dict("Wordlists/MEGADICT.txt",l_AllWords)
 
     l_AllWords = optimize_wordlist(l_AllWords,wordLength,bannedCharacters)
 
@@ -158,7 +161,7 @@ def LetterIndextoWordCoords(Index:int,iWordLen:int,iNumOfWords:int) -> list:
     #Horizontal word:
     HorizWord = iSetIndex
     HorizIndex = iSuperIndex
-    if HorizIndex >= wordLen:
+    if HorizIndex >= iWordLen:
         HorizWord = None
         HorizIndex = None
     
@@ -461,7 +464,7 @@ def ReducePossibleWords(sLetters:str,sColors:str,lHorizLetters:list,lVertLetters
             yCoord = AnswerListIndex * 2
             sRegex = ""
             lRequiredLetters = []
-            for x in range(wordLen):
+            for x in range(iWordLen):
                 lPossibleLetters = PossibleLettersAtLocation(x,yCoord,sLetters,sColors,lHorizLetters,lVertLetters,l_HorizontalAnswers,l_VerticalAnswers,lUnHomed)
                 if not lPossibleLetters == []: #this shouldn't ever be true, but *shrug*
                     sRegex+="["
@@ -493,7 +496,7 @@ def ReducePossibleWords(sLetters:str,sColors:str,lHorizLetters:list,lVertLetters
             xCoord = AnswerListIndex * 2
             sRegex = ""
             lRequiredLetters = []
-            for y in range(wordLen):
+            for y in range(iWordLen):
                 lPossibleLetters = PossibleLettersAtLocation(xCoord,y,sLetters,sColors,lHorizLetters,lVertLetters,l_HorizontalAnswers,l_VerticalAnswers,lUnHomed)
                 if not lPossibleLetters == []: #this shouldn't ever be true, but *shrug*
                     sRegex+="["
@@ -1032,6 +1035,12 @@ if __name__ == '__main__':
         print("\n")
         s_Waffle = input("Enter Your setup: ").lower()
         s_Colors = input("Enter the colors for them (G=Green, Y=Yellow, .=White): ").lower()
+        iInputLength = len(s_Waffle)
+        iNumberOfWords = 3
+        iMaxSwaps = 15
+        bRoyaleMode = False
+        iWordLen = 5
+
         if FirstLoop:
             #Deluxe Waffle settings
             #s_Waffle 5x5 length = 21
@@ -1055,32 +1064,39 @@ if __name__ == '__main__':
                 #7x7=20
                 #10+((WordLen-5)*5)
 
+            #check for royales first
+            if(iInputLength == 25):
+                print("That looks like a waffle Royale!")
+                #TODO: Royale stuff
+                iMaxSwaps = 15
+                iNumberOfWords = 3 #3 in each dimension
+                bRoyaleMode = True
 
-            iSLength = len(s_Waffle)
-            wordLen = ceil(2*sqrt(3*iSLength + 1)-1)//3 #it should be x.0 anyways, but we can't have a float floating around.
-            #wordLen = 3*iSLength
-            #wordLen += 1
-            #wordLen = 2*sqrt(wordLen)
-            #wordLen -= 1
-            #wordLen = wordLen//3 #broken up if the runtime doesn't compute properly
+            else:
+                iWordLen = ceil(2*sqrt(3*iInputLength + 1)-1)//3 #it should be x.0 anyways, but we can't have a float floating around.
+                #wordLen = 3*iSLength
+                #wordLen += 1
+                #wordLen = 2*sqrt(wordLen)
+                #wordLen -= 1
+                #wordLen = wordLen//3 #broken up if the runtime doesn't compute properly
 
-            NumberOfWords = ceil(wordLen/2)
-            iMaxSwaps = 10+((wordLen-5)*5)
+                iNumberOfWords = ceil(iWordLen/2)
+                iMaxSwaps = 10+((iWordLen-5)*5)
 
-            print("That looks like",NumberOfWords,"horizontal words, each",wordLen,"characters long, and up to",iMaxSwaps,"Swaps!")
+                print("That looks like",iNumberOfWords,"horizontal words, each",iWordLen,"characters long, and up to",iMaxSwaps,"Swaps!")
 
-            #bDeluxe = True
-            #if bDeluxe:
-            #    wordLen = 7
-            #    NumberOfWords = 4
-            l_HorizontalAnswers = [[] for i in range(NumberOfWords)]
-            l_VerticalAnswers = [[] for i in range(NumberOfWords)]
-            l_VerticalKnownLetters = [["."] * wordLen for i in range(NumberOfWords)]
-            l_HorizontalKnownLetters = [["."] * wordLen for i in range(NumberOfWords)]
+                #bDeluxe = True
+                #if bDeluxe:
+                #    wordLen = 7
+                #    NumberOfWords = 4
+            l_HorizontalAnswers = [[] for i in range(iNumberOfWords)]
+            l_VerticalAnswers = [[] for i in range(iNumberOfWords)]
+            l_VerticalKnownLetters = [["."] * iWordLen for i in range(iNumberOfWords)]
+            l_HorizontalKnownLetters = [["."] * iWordLen for i in range(iNumberOfWords)]
 
-            build_dictionary(wordLen,bannedChars)
+            build_dictionary(iWordLen,bannedChars)
             #lists loaded. Fill the lists.
-            for i in range(NumberOfWords):
+            for i in range(iNumberOfWords):
                 DeepExtend(l_HorizontalAnswers[i],l_AllWords)
                 DeepExtend(l_VerticalAnswers[i],l_AllWords)
             FirstLoop = False
@@ -1133,8 +1149,8 @@ if __name__ == '__main__':
         for i in range(len(l_Swaps)):
             print("Swap #"+str(i+1)+": \""+str(l_Swaps[i][2])+"\"("+str(l_Swaps[i][0]+1)+","+str(l_Swaps[i][1]+1)+") to \""+str(l_Swaps[i][5])+"\"("+str(l_Swaps[i][3]+1)+","+str(l_Swaps[i][4]+1)+")")
 
-        for y in range(wordLen):
-            for x in range(wordLen):
+        for y in range(iWordLen):
+            for x in range(iWordLen):
                 lPossibleLetters = PossibleLettersAtLocation(x,y,s_Waffle,s_Colors,l_HorizontalKnownLetters,l_VerticalKnownLetters,l_HorizontalAnswers,l_VerticalAnswers,l_FullyUnhomedLetters)
                 if len(lPossibleLetters)>1:
                     print("Possible Letters at ("+str(x)+","+str(y)+") :"+str(lPossibleLetters))
@@ -1294,6 +1310,25 @@ if __name__ == '__main__':
 #550
 #s_Waffle = "cneocalalabemyioprmlr"
 #s_Colors = "gy.ygyyyyygyy...g...g"
+#551
+#s_Waffle = "seegniophuteoowuednre"
+#s_Colors = "g.y.g.y.y.ggyy.yg..yg"
+#552
+#s_Waffle = "aareetdsrelabtilmruih"
+#s_Colors = "g.y.g.g.yygyy.y.gy.yg"
+#553
+#s_Waffle = "ipertnereoifrksoruunn"
+#s_Colors = "gy..gg..y.gyy..ygy..g"
+#554
+#s_Waffle = "sllhtlgearplaluheetue"
+#s_Colors = "gyyyg....ygy....g.y.g"
+#556
+#s_Waffle = "sewenruweonnexepbhear"
+#s_Colors = "g.y.gy.yy.g.y.g.g.y.g"
+#557
+#s_Waffle = "druasdllyateleootplsy"
+#s_Colors = "ggy.g..gyyg.yyy.g...g"
+
 
 #s_Waffle = "peetdruaattloepvlaara"
 #s_Colors = "g.y.g...y.gy....gg.yg"
@@ -1346,6 +1381,9 @@ if __name__ == '__main__':
 #Deluxe #61:
 #s_Waffle = "negeapareordiippddafpelmterdlurateadrlte"
 #s_Colors = "y.g.g...y.yg.ggg.gy.yyg.ggg.gyyyyy.gyg.y"
+#Deluxe #62:
+#s_Waffle = "nutxqnnsntcdrnaiutekntooiiisnimaeunguepe"
+#s_Colors = "yyg.g..yy.yg.g.g.g.ggygyg.g.g...yyyg.g.y"
 
 #Waffle royale - new: 6 total words, 2 are 7 letters long, 4 are 5 letters. it is the center words that are extra long.
 #shape:
@@ -1404,3 +1442,22 @@ if __name__ == '__main__':
 #	],
 #	"green": 7,
 #	"yellow": 7,
+#Royale 77
+#s_Waffle = "ilchsnireegoahiuosolcnoes"
+#s_Colors = "gg...g...y...yy.y..g.yygg"
+#Royale 78
+#s_Waffle = "ADTETENZRNUUMAIETSHNAIOYE"
+#s_Colors = ???
+#solution":"###A####DENSE##O#I#N#AZIMUTH#E#A#R##NUTTY####E###","words":["DENSE","DOZEN","AZIMUTH","ANIMATE","NUTTY","ENTRY"],"green":7,"yellow":6,"
+#Royale 79
+#s_Waffle = "dsxptperdaruasedermtotrda"
+#s_Colors = "yg..yg...yy.g..y...g.yyg."
+#Royale 80
+#s_Waffle = "cbkicfieslappefuspnrdlahg"
+#s_Colors = "gg.y.g..y.yygy...y.g..ygg"
+#Royale 82
+#s_Waffle = "ahnionspdmacomupiieovlfea"
+#s_Colors = "gg.y.g......g..yy.ygyy.gg"
+#Royale 83
+#s_Waffle = "aotdveloiaudpttyniuolxsed"
+#s_Colors = "yg.y.g...yy.gyy..y.g...g."
