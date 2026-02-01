@@ -8,6 +8,8 @@ import io
 import math
 import random
 import re
+import string
+import sys
 #import time
 #import timeit
 
@@ -464,13 +466,122 @@ def getBestPlay(l_wordlist, s_CurrentLayout,c_CurrentGuess) -> str:
 
     return s_BestResultFilter
 
+def genStats(l_WordList, l_WordStats = None, l_LetterStats = None, noisy = False) -> None:
+    """Pulls words from l_WordList and outputs how common certain letters are in l_LetterStats (Including duplicate letters), and l_WordStats (one instance counted per word)
+    Setting either output list as None skips that calculation.
+    noisy will output extra info to the console."""
+    #note: to replace lists, you have to modify them directly. assigning them breaks the initial link, so you don't modify the original
 
+    if l_LetterStats is not None:
+        totalChars=0
+        #clear array
+        for i in range(len(l_LetterStats)):
+            l_LetterStats[i] = 0
+        for word in l_WordList:
+            for char in word:
+                try:
+                    ind = string.ascii_letters.index(char)
+                    l_LetterStats[ind] += 1
+                    totalChars += 1
+                except ValueError:
+                    print("Non-ascii character found: "+char)
+        if noisy:
+            maxCount = int(maxUnder(l_LetterStats,len(l_WordList)))
+            #find all instances of that count
+            maxLetters = [i for i, j in enumerate(l_LetterStats) if j == maxCount]
+            #normalize the indexes into characters
+            for i in range(len(maxLetters)):
+                maxLetters[i] = chr(maxLetters[i]+97)
+            if len(maxLetters) > 1:
+                letters = ""
+                for letter in maxLetters:
+                    letters += letter
+                    letters += ", "
+                print("Most common letters are: "+letters+"with "+str(maxCount)+" occurrences each.")
+            else:
+                print("Most common letter is: "+str(maxLetters[0])+" with "+str(maxCount)+" occurrences.")
+
+            minCount = int(minOver(l_LetterStats,0))
+            minLetters = [i for i, j in enumerate(l_LetterStats) if j == minCount]
+            for i in range(len(minLetters)):
+                minLetters[i] = chr(minLetters[i]+97)
+            if len(minLetters) > 1:
+                letters = ""
+                for letter in minLetters:
+                    letters += letter
+                    letters += ", "
+                print("The least common letters are: "+letters+"with only "+str(minCount)+" occurances each.")
+            else:
+                print("The least common letter is: "+str(minLetters[0])+" with only "+str(minCount)+" occurances.")
+
+
+            print("Total characters counted: "+str(totalChars))
+
+    #more useful counts: only count one instance per word
+    if l_WordStats is not None:
+        charsSeen = []
+        for i in range(len(l_WordStats)):
+            l_WordStats[i] = 0
+        for word in l_WordList:
+            for char in word:
+                try:
+                    if char not in charsSeen:
+                        charsSeen.append(char)
+                        ind = string.ascii_letters.index(char)
+                        l_WordStats[ind] += 1
+                except ValueError:
+                    print("Non-ascii character found: "+char)
+            charsSeen = []
+        if noisy:
+            maxCount = int(maxUnder(l_WordStats,len(l_WordList)))
+            #find all instances of that count
+            maxLetters = [i for i, j in enumerate(l_WordStats) if j == maxCount]
+            #normalize the indexes into characters
+            for i in range(len(maxLetters)):
+                maxLetters[i] = chr(maxLetters[i]+97)
+
+            if len(maxLetters) > 1:
+                letters = ""
+                for letter in maxLetters:
+                    letters += letter
+                    letters += ", "
+                print("Most common letters are: "+letters+" in "+str(maxCount)+" words each.")
+            else:
+                print("Most common letter is: "+str(maxLetters[0])+" in "+str(maxCount)+" words.")
+
+            minCount = int(minOver(l_WordStats,0))
+            minLetters = [i for i, j in enumerate(l_WordStats) if j == minCount]
+            for i in range(len(minLetters)):
+                minLetters[i] = chr(minLetters[i]+97)
+            if len(minLetters) > 1:
+                letters = ""
+                for letter in minLetters:
+                    letters += letter
+                    letters += ", "
+                print("The least common letters are: "+letters+"in only "+str(minCount)+" words each.")
+            else:
+                print("The least common letter is: "+str(minLetters[0])+" in only "+str(minCount)+" words.")
+
+def maxUnder(l_Numbers:list,f_ValueCap:float = float('inf')) -> float:
+    f_tempMax = float('-inf')
+    for f_Num in l_Numbers:
+        if f_Num > f_tempMax and f_Num < f_ValueCap:
+            f_tempMax = f_Num
+    return f_tempMax
+
+def minOver(l_Numbers:list,f_ValueFloor:float = float('-inf')) -> float:
+    f_tempMin = float('inf')
+    for f_Num in l_Numbers:
+        if f_Num < f_tempMin and f_Num > f_ValueFloor:
+            f_tempMin = f_Num
+    return f_tempMin
 
 
 
 #program
-load_dict("Wordlists/words.txt",l_WordList)
-load_dict("Wordlists/wordle_answerlist.txt",l_WordList)
+#load_dict("Wordlists/words.txt",l_WordList)
+#load_dict("Wordlists/wordle_answerlist.txt",l_WordList)
+load_dict("Wordlists/1000-most-common-words.txt",l_WordList)
 
 input_wordlength = input("Desired word length: ")
 try:
@@ -493,6 +604,22 @@ except: #they didn't enter a proper number
 s_GivenInfo = "."*i_WordLen
 
 #main game loop
+gettrace = getattr(sys, 'gettrace', None)
+
+if gettrace is None:
+    print('No sys.gettrace')
+    CheatyDevMode = False
+elif gettrace():
+    print('Hmm, Big Debugger is watching me')
+    CheatyDevMode = True
+else:
+    CheatyDevMode = False
+if(CheatyDevMode):
+    print("Current Usable Words (",len(l_WordList),"):")
+    if(len(l_WordList)<200):
+        print(l_WordList)
+    l_LetterFreq = [0] * 26
+    genStats(l_WordList,l_LetterFreq,None,True)
 while(len(l_WrongGuesses) < i_MaxErrorCount ):
     display_hangman(s_GivenInfo, l_WrongGuesses, i_MaxErrorCount)
     c_GuessInput = input("Pick a letter: ").strip().lower()
@@ -506,6 +633,13 @@ while(len(l_WrongGuesses) < i_MaxErrorCount ):
             else:
                 s_GivenInfo = s_bestPlay
         l_WordList = filter_wordlist(l_WordList,s_GivenInfo,l_WrongGuesses) #make sure to update the wordlist after every letter
+        if(CheatyDevMode):
+            print("Current Usable Words (",len(l_WordList),"):")
+            if(len(l_WordList)<200):
+                print(l_WordList)
+            l_LetterFreq = [0] * 26
+            genStats(l_WordList,l_LetterFreq,None,True)
+
         try:
             s_GivenInfo.index(".") #will throw an error if there's no blanks left. If there are, we haven't lost yet! Even if the wordlist is down to one word, if they don't know it: tough!
         except:
