@@ -14,6 +14,7 @@ b_AnyWordLength = False
 
 #global variables
 legalWords = []
+illegalWords = []
 letterStats = [0] * 26
 wordsContainingLetters = [0] * 26
 unknownPositions = []
@@ -37,6 +38,7 @@ def load_dict(file,StorageList):
 
 def build_dictionary(wordLength,bannedCharacters):
     global legalWords
+    global illegalWords
 
     #load unix words
     #load_dict("Wordlists/words.txt",legalWords)
@@ -63,10 +65,13 @@ def build_dictionary(wordLength,bannedCharacters):
     #load_dict("Wordlists/MEGADICT.txt",legalWords)
 
     #load wordle answer list (sorted, so it can't be directly used for cheating)
-    load_dict("Wordlists/wordle_answerlist.txt",legalWords)
+    #load_dict("Wordlists/wordle_answerlist.txt",legalWords)
 
     #load wordle complete list (both accepted words and answers)
     #load_dict("Wordlists/wordle_complete.txt",legalWords)
+
+    #load expanded wordle answer list (NYT is adding words, and they're tricky ones)
+    load_dict("Wordlists/wordle_answerlist_WordleTools.txt",legalWords)
 
     #load reduced wordle answer list (contains only the words after wordle 260 (CLOTH))
     #load_dict("Wordlists/wordle_reduced_answerlist.txt",legalWords)
@@ -74,8 +79,12 @@ def build_dictionary(wordLength,bannedCharacters):
     #load list of names
     #load_dict("Wordlists/names.txt",legalWords)
 
+    #load ILLEGAL words (This list contains all previous wordle answers)
+    load_dict("Wordlists/wordle_seen_answers.txt",illegalWords)
+    illegalWords = optimize_wordlist(illegalWords,wordLength,bannedCharacters) #just doing this so that they're both processed the same.
+
     #print("Optimizing wordlist...")
-    legalWords = optimize_wordlist(legalWords,wordLength,bannedCharacters)
+    legalWords = optimize_wordlist(legalWords,wordLength,bannedCharacters,illegalWords)
     #list optomized
 
     print("Legal word list assembled.")
@@ -96,7 +105,7 @@ def load_extra_wordlists(wordLength,bannedCharacters):
     print("First line: \""+str(WholeWordList[0])+"\"")
     print("final line: \""+str(WholeWordList[len(WholeWordList)-1])+"\"")
 
-def optimize_wordlist(wordList,wordLength,bannedCharacters) -> list:
+def optimize_wordlist(wordList,wordLength,bannedCharacters,illegalWords = []) -> list:
     """
     Returns all words in \"wordList\" that are not \"wordLength\" characters long or contains any of \"bannedCharacters\"\n
     The new list is deduplicated and sorted alphabetically.\n
@@ -108,20 +117,22 @@ def optimize_wordlist(wordList,wordLength,bannedCharacters) -> list:
         word = word.strip().lower()
         if(len(word)==wordLength or b_AnyWordLength):
             if not any(bannedCharacter in bannedCharacters for bannedCharacter in word):
-                #print(word)
-                newWords.append(word)
+                if word not in illegalWords:
+                    #print(word)
+                    newWords.append(word)
     newWords = list(dict.fromkeys(newWords)) #dedupe the list (because evidently it needs that)
     newWords.sort() #why not have it sorted, too?
     return newWords
 
-def reduce_Wordlist(l_WordList, l_bannedChars = [], l_WantedLetters = [], s_Regex = "") -> list:
+def reduce_Wordlist(l_WordList, l_bannedChars = [], l_WantedLetters = [], s_Regex = "", l_KnownCounts = []) -> list:
     """Takes in a list of words, and returns only the words that fit certain criteria"""
     newWords = []
     for word in l_WordList:
         if not any(bannedCharacter in l_bannedChars for bannedCharacter in word): #no banned letters
             if StrContainsAllLettersWithCount(word,l_WantedLetters): #all(needLetter in word for needLetter in neededLetters): #contains the letters we need
-                if re.search(s_Regex, word) is not None:
-                    newWords.append(word)
+                if StrContainsExactlyNumLetters(word, l_KnownCounts):
+                    if re.search(s_Regex, word) is not None:
+                        newWords.append(word)
     return newWords
 
 def genStats(l_WordList, l_WordStats = None, l_LetterStats = None, noisy = False) -> None:
@@ -220,14 +231,20 @@ def genStats(l_WordList, l_WordStats = None, l_LetterStats = None, noisy = False
             else:
                 print("The least common letter is: "+str(minLetters[0])+" in only "+str(minCount)+" words.")
 
+#TODO: this doesn't seem to work quite right with double letters being ruled out. For example, if "erect" is guessed and gets "yy...", then "sewer" is no valid, since we know there's only one E
 def InterrogateUserForInfo_and_FilterWordlist(hangmanRules,WordleMode) -> None:
     global bannedChars
     global unknownPositions
     global knownPositions
     global legalWords
 
+    l_KnownCounts = [] #2d list, [Letter, number of known occurances]
+
     if WordleMode:
         s_WordAttempt = input("Enter the word you tried: ").lower()
+        if (s_WordAttempt == "printout" and wordLen != 8) or s_WordAttempt == "printall" or (s_WordAttempt == "print" and wordLen != 5) or s_WordAttempt == "listall":
+                    print(legalWords)
+                    s_WordAttempt = input("Now, Enter the word you tried: ").lower()
         s_WordOutcome = input("How did that go for you? (y=yellow, g=green, anything else = grey) ").lower()
         #yellows added to unknowPositions, Greens added to filter, greys added to banned chars
         #edge cases: guessed a double letter when only a single exists. make sure to not add it to banned. however, it also means the letter is not there.
@@ -240,7 +257,7 @@ def InterrogateUserForInfo_and_FilterWordlist(hangmanRules,WordleMode) -> None:
         elif len(s_WordOutcome) > len(s_WordAttempt):
             print("That response is too long. I'm going to assume that was erroneous.")
             return
-        s_FilterString = ""
+        s_FilterString = "" #regex to filter the current wordlist
         l_GreenLetters = []
         l_YellowLetters = []
         l_GreyLetters = []
@@ -259,10 +276,20 @@ def InterrogateUserForInfo_and_FilterWordlist(hangmanRules,WordleMode) -> None:
                 s_FilterString += "[^"+s_WordAttempt[i]+"]"
         #check for double letters while filling out bannedChars
         l_FoundAll = []
+
         for i in range(len(l_GreyLetters)):
             if l_GreyLetters[i] in l_YellowLetters: #we have to check for yellow first or it'll fullban the letter despite not knowing the position. (see: eerie y.g.g for scree)
                 print("Looks like there's no more \""+l_GreyLetters[i]+"\"s in the word.")
                 #We don't know where it goes, so fullban isn't possible, and we already added it to filter string. so just remove the entry
+                #TODO: count the number of valid letters found, and add a new filter that verifies the count of letters in each word. We can add all greys and yellows to known non-positions, and adding a count will allow us to figure out actual possible solutions instead of "sewer" when we know there's only one E!
+                #we know the axact number of times this letter exists in this word. We find that number by counting the number of yellows and greens tied to that letter.
+                i_LetterOccurances = 0
+                for n in range(len(s_WordAttempt)):
+                    if (s_WordAttempt[n] == l_GreyLetters[i]) and (s_WordOutcome[n] in ["y","g"]): #if the letter at n is the one we are counting AND it is marked as valid, increment the counter.
+                        i_LetterOccurances+=1
+                #We know that l_GreyLetters[i] occurs i_LetterOccurances times in the word, and ONLY that number of times.
+                print("We knot that \""+str(l_GreyLetters[i])+"\" appears EXACTLY "+str(i_LetterOccurances)+" times.")
+                l_KnownCounts.append([l_GreyLetters[i],i_LetterOccurances])
                 l_GreyLetters[i] = ""
             elif l_GreyLetters[i] in l_GreenLetters:
                 print("Looks like there's no more \""+l_GreyLetters[i]+"\"s in the word.")
@@ -302,15 +329,13 @@ def InterrogateUserForInfo_and_FilterWordlist(hangmanRules,WordleMode) -> None:
 
         #Finally, put the yellow letters into unknownPositions, being careful to only double up on confirmed double letters
         for char in l_YellowLetters:
-            if char not in unknownPositions:
+            i_neededCount = max(((l_YellowLetters.count(char) + l_GreenLetters.count(char)) - unknownPositions.count(char)),0)
+            #if unknownPositions.count(char) < (l_YellowLetters.count(char) + l_GreenLetters.count(char)):
+            for i in range(i_neededCount):
                 unknownPositions.append(char)
-            else:
-                i_neededCount = max(((l_YellowLetters.count(char) + l_GreenLetters.count(char)) - unknownPositions.count(char)),0)
-                #if unknownPositions.count(char) < (l_YellowLetters.count(char) + l_GreenLetters.count(char)):
-                for i in range(i_neededCount):
-                    unknownPositions.append(char)
         knownPositions = s_FilterString
-    else:
+
+    else: #not wordle mode
         purgatory = True
         while purgatory:
             bannedLetters = ""
@@ -356,11 +381,15 @@ def InterrogateUserForInfo_and_FilterWordlist(hangmanRules,WordleMode) -> None:
             if char in unknownPositions:
                 if bool(input("Did you mean there are multiple \""+char+"\"s? ")):
                     unknownPositions.append(char)
+                    if bool(input("Are there EXACTLY "+unknownPositions.count(char)+" "+char+"s in the word?")):
+                        l_KnownCounts.append([char,unknownPositions.count(char)])
             else:
                 unknownPositions.append(char)
+                if bool(input("Are there EXACTLY "+unknownPositions.count(char)+" "+char+"s in the word?")):
+                        l_KnownCounts.append([char,unknownPositions.count(char)])
 
 
-    legalWords = reduce_Wordlist(legalWords, bannedChars, unknownPositions, knownPositions)
+    legalWords = reduce_Wordlist(legalWords, bannedChars, unknownPositions, knownPositions, l_KnownCounts)
 
 def str_Insert(s_Original, i_index, s_Insert) -> str:
     """Returns a string with s_Insert placed at i_index"""
@@ -379,6 +408,20 @@ def StrContainsAllLettersWithCount(s_Word, l_Letters) -> bool:
             return False
     
     #if it got this far, it's a pass
+    return True
+
+def StrContainsExactlyNumLetters(s_Word, l_KnownCounts) -> bool:
+    """
+    Docstring for StrContainsExactlyNumLetters
+    
+    :param s_Word: the string to check
+    :param l_KnownCounts: a list of lists containing combinations of a character, and how many times it should appear in the word
+    :return: if the word contains exactly that many of each character listed in l_KnownCounts
+    :rtype: bool
+    """
+    for i in range(len(l_KnownCounts)):
+        if s_Word.count(l_KnownCounts[i][0]) != l_KnownCounts[i][1]:
+            return False
     return True
 
 def mostCommonLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordList:list[str] = None, l_LetterCounts:list[int] = None, l_2DLetterList:list = None, l_IgnoredLetters:list[str] = None, noisy:bool = True) -> list:
@@ -1008,6 +1051,13 @@ while len(legalWords) > 1:
     #suggestWord(wordLen, unknownPositions, b_KnowAllPositions)
     suggestWord(legalWords, wordLen+1, unknownPositions, b_KnowAllPositions, b_HardMode, WholeWordList, [], True, True) #to be most faithful to the first part of the function, I originally used "(1+wordLen-len(unknownPositions))" but wordLen+1 is actually the part used later in the function
     if b_SuperSearch & (not b_FirstRun):
+        if not b_HardMode:
+            print()
+            print("Out of the remaining answers:")
+            OptimalAnswerWord = FindOptimalPlay(legalWords,True,WholeWordList)
+            print("SuperSearch Suggestion: "+str(OptimalAnswerWord))
+            print()
+            print("Otherwise, out of all usable words:")
         OptimalWord = FindOptimalPlay(legalWords,b_HardMode,WholeWordList)
         print("SuperSearch Suggestion: "+str(OptimalWord))
     InterrogateUserForInfo_and_FilterWordlist(b_KnowAllPositions, b_WordleMode)
