@@ -5,6 +5,8 @@ import re
 import statistics
 import math
 import random
+from functools import lru_cache
+from collections import defaultdict
 
 #hardcoded variables
 bannedChars = ["'","Å","â","ä","á","å","ç","é","è","ê","í","ñ","ó","ô","ö","ü","û","-"," "]
@@ -49,7 +51,10 @@ def build_dictionary(wordLength,bannedCharacters):
     load_dict("Wordlists/wordle_answerlist.txt",PossibleAnswers)
 
     #load wordle complete list (both accepted words and answers)
-    #load_dict("Wordlists/wordle_complete.txt",PossibleAnswers)
+    load_dict("Wordlists/wordle_complete.txt",PossibleAnswers)
+
+    #Unix dict
+    load_dict("Wordlists/words.txt",PossibleAnswers)
 
     PossibleAnswers = optimize_wordlist(PossibleAnswers,wordLength,bannedCharacters)
 
@@ -108,12 +113,14 @@ def genStats(l_WordList, l_WordStats = None, l_LetterStats = None, noisy = False
             l_LetterStats[i] = 0
         for word in l_WordList:
             for char in word:
-                try:
-                    ind = string.ascii_letters.index(char)
+                c = char.lower()
+                if c in string.ascii_lowercase:
+                    ind = ord(c) - 97
                     l_LetterStats[ind] += 1
                     totalChars += 1
-                except ValueError:
-                    print("Non-ascii character found: "+char)
+                else:
+                    if noisy:
+                        print("Non-ascii character found: "+char)
         if noisy:
             maxCount = max(l_LetterStats)
             #find all instances of that count
@@ -153,13 +160,19 @@ def genStats(l_WordList, l_WordStats = None, l_LetterStats = None, noisy = False
             l_WordStats[i] = 0
         for word in l_WordList:
             for char in word:
+                c = char.lower()
                 try:
-                    if char not in charsSeen:
-                        charsSeen.append(char)
-                        ind = string.ascii_letters.index(char)
-                        l_WordStats[ind] += 1
-                except ValueError:
-                    print("Non-ascii character found: "+char)
+                    if c not in charsSeen:
+                        charsSeen.append(c)
+                        if c in string.ascii_lowercase:
+                            ind = ord(c) - 97
+                            l_WordStats[ind] += 1
+                        else:
+                            if noisy:
+                                print("Non-ascii character found: "+char)
+                except Exception:
+                    if noisy:
+                        print("Non-ascii character found: "+char)
             charsSeen = []
         if noisy:
             maxCount = max(l_WordStats)
@@ -255,8 +268,10 @@ def IUI_a_FWL_Breakout(s_WordAttempt, l_Answers, l_UnknownPositions, l_GreyChara
     #additional filters done
 
     #check if the input is possible
+    l_BackupAnswers = l_Answers
     if len(reduce_Wordlist(l_Answers, l_GreyCharacters, l_TempYellowLetters, s_FilterString)) < 1:
         print("Check that input again. There's no words left if that's the case.")
+        l_Answers = l_BackupAnswers
         return False
 
     #make sure the green letters are in unknownPositions so they can pad double letters
@@ -383,7 +398,7 @@ def mostCommonLetters(i_MaxLetters:int, i_MinCount:int, i_MaxCount:int, l_WordLi
         if l_LetterCounts is None:
             #calculate with genstats and build
             l_LetterCounts = [0] * 26
-            genStats(l_WordList,l_LetterCounts)
+            genStats(l_WordList, None, l_LetterCounts)
         
         for i in range(26):
             l_CombinedList[i][0] = chr(i+97)
@@ -448,7 +463,7 @@ def printLetters(l_WordList:list[str], i_MinCount:int = 1, i_MaxCount:int = None
         if l_LetterCounts is None:
             #calculate with genstats and build
             l_LetterCounts = [0] * 26
-            genStats(l_WordList,l_LetterCounts)
+            genStats(l_WordList, None, l_LetterCounts)
         
         for i in range(26):
             l_CombinedList[i][0] = chr(i+97)
@@ -567,6 +582,21 @@ def FindWordsWithOnlyLetters(wantedLetters, wordList) -> list:
         l_Output.append(wordList[maxHitWords[i]])
     return l_Output
 
+
+def _score_play_worker(args):
+    """Module-level worker used by multiprocessing.Pool. Expects (play, answers)."""
+    play, answers = args
+    outcomes = defaultdict(int)
+    for answer in answers:
+        out = GetWordleResponse(play, answer)
+        outcomes[out] += 1
+    if outcomes:
+        counts = list(outcomes.values())
+        return [play, sum(counts) / len(counts), max(counts)]
+    else:
+        return [play, 0, 0]
+
+@lru_cache(maxsize=None)
 def GetWordleResponse(s_Input, s_Answer) -> str:
     """Returns a list of ".","G", and "Y" for absent, Green, and Yellow, respectively, to simulate what wordle would respond with"""
     s_Correct = "G"
@@ -620,7 +650,7 @@ def GetWordleResponse(s_Input, s_Answer) -> str:
         s_Output += l_Evaluation[i]
     return s_Output
 
-def GetGuessScores(l_WordList, l_WholeWordList = [], l_UselessCharacters = []) -> list:
+def GetGuessScores(l_WordList, l_WholeWordList = [], l_UselessCharacters = [], use_parallel: bool = True, heuristic_k: int = 100) -> list:
     """A rather expensive function. runs in ~ O(n*m) time, depending on the length of the lists put in.
     BUT: should give the best possible wordle play, or pretty close to it!
     l_WordList is a list of all the answers
@@ -645,39 +675,57 @@ def GetGuessScores(l_WordList, l_WholeWordList = [], l_UselessCharacters = []) -
     #however, if the answers are possible solutions, we want them on there first. Only relevant if they're providing perfect scores, but it happens enough.
     #dedupe the list if answer list is contained in the whole list (as it most certainly is):
     l_PossiblePlays = list(dict.fromkeys(l_PossiblePlays))
+    # Two-stage heuristic: quick sampling estimator across all plays, then exact scoring
+    # on a reduced pool. This gives much better matching to full scoring.
+    if heuristic_k is not None and 0 < heuristic_k < len(l_PossiblePlays):
+        # small sample size for quick estimation
+        quick_sample_size = min(250, max(50, int(len(l_WordList) * 0.05)))
+        try:
+            quick_samples = random.sample(l_WordList, quick_sample_size) if quick_sample_size < len(l_WordList) else list(l_WordList)
+        except Exception:
+            quick_samples = list(l_WordList)
 
-    l_ScoreList = [[0 for x in range(3)] for y in range(len(l_PossiblePlays))]
-        
-    for i in range(len(l_PossiblePlays)):
-        l_ScoreList[i][0] = l_PossiblePlays[i]
-        #to access: [i][0] is the word, [i][1] is the average score, [i][2] is the maximum
-
-    for i in range(len(l_PossiblePlays)):
-        l_PossibleOutcomes = [[0 for x in range(len(l_PossiblePlays))] for y in range(2)]
-        i_PossOutIndex = 0
-        index = 0
-        for j in range(len(l_WordList)):
-            l_outcome = GetWordleResponse(l_PossiblePlays[i],l_WordList[j])
-            try:
-                index = l_PossibleOutcomes[0].index(l_outcome)
-            except:
-                index = i_PossOutIndex
-                i_PossOutIndex+= 1
-            l_PossibleOutcomes[0][index] = l_outcome
-            l_PossibleOutcomes[1][index] += 1
-        #outcomes for this word calculated
-        #calculate average score:
-        i_sum = 0
-        i_divisor = 0
-        for k in range(len(l_PossibleOutcomes[0])):
-            if l_PossibleOutcomes[1][k] > 0:
-                i_sum += l_PossibleOutcomes[1][k]
-                i_divisor += 1
+        quick_estimates = []
+        for play in l_PossiblePlays:
+            outcomes = defaultdict(int)
+            for answer in quick_samples:
+                out = GetWordleResponse(play, answer)
+                outcomes[out] += 1
+            if outcomes:
+                counts = list(outcomes.values())
+                avg = sum(counts) / len(counts)
+                # prefer answer words slightly
+                if play in l_WordList:
+                    avg *= 0.995
+                quick_estimates.append((play, avg))
             else:
-                break
-        if i_divisor > 0:
-            l_ScoreList[i][1] = i_sum / i_divisor #thankfully in python 3 this gives a float
-        l_ScoreList[i][2] = max(l_PossibleOutcomes[1])
+                quick_estimates.append((play, float('inf')))
+
+        quick_estimates.sort(key=lambda x: x[1])
+        pool_k = min(len(l_PossiblePlays), max(heuristic_k * 3, 1500))
+        l_PossiblePlays = [w for w, _ in quick_estimates[:pool_k]]
+
+    l_ScoreList = []
+
+    # Use multiprocessing for large runs if requested
+    if use_parallel and len(l_PossiblePlays) > 50:
+        import multiprocessing as mp
+        cpu_count = mp.cpu_count()
+        with mp.Pool(processes=cpu_count) as pool:
+            args = ((play, l_WordList) for play in l_PossiblePlays)
+            for res in pool.imap_unordered(_score_play_worker, args, chunksize=16):
+                l_ScoreList.append(res)
+    else:
+        for play in l_PossiblePlays:
+            outcomes = defaultdict(int)
+            for answer in l_WordList:
+                out = GetWordleResponse(play, answer)
+                outcomes[out] += 1
+            if outcomes:
+                counts = list(outcomes.values())
+                l_ScoreList.append([play, sum(counts) / len(counts), max(counts)])
+            else:
+                l_ScoreList.append([play, 0, 0])
     
     #now that I have the scores, I want to trim the useless values
     i_WorstAcceptableAverage = len(l_WordList) - 0.5 #must on average remove at least 1 word, 50% of the time
@@ -920,63 +968,64 @@ def PrintWordsRemaining(s_Name:str, l_wordlist:list[str]) -> None:
 
 
 #program
-print("NOTE: for every yes/no question, blank responses are \"no\", and any response is considered \"yes\"")
-b_SuperSearch = bool(input("Enable SuperSearch (Very slow, but the best possible outcome)? "))
-b_AllWords = bool(input("Load whole wordlist (Makes SS take 6.5x longer, but may yield SLIGHTLY better results)?"))
-if not b_SuperSearch:
-    b_SuperSearchConfirmed = False
-build_dictionary(wordLen,bannedChars)
+if __name__ == "__main__":
+    print("NOTE: for every yes/no question, blank responses are \"no\", and any response is considered \"yes\"")
+    b_SuperSearch = bool(input("Enable SuperSearch (Very slow, but the best possible outcome)? "))
+    b_AllWords = bool(input("Load whole wordlist (Makes SS take 6.5x longer, but may yield SLIGHTLY better results)?"))
+    if not b_SuperSearch:
+        b_SuperSearchConfirmed = False
+    build_dictionary(wordLen,bannedChars)
 
-WholeWordList += PossibleAnswers
-if b_AllWords:
-    load_extra_wordlists(wordLen,bannedChars)
+    WholeWordList += PossibleAnswers
+    if b_AllWords:
+        load_extra_wordlists(wordLen,bannedChars)
 
-#lists loaded. Fill the lists.
-l_ULAnswers.extend(PossibleAnswers)
-l_URAnswers.extend(PossibleAnswers)
-l_LLAnswers.extend(PossibleAnswers)
-l_LRAnswers.extend(PossibleAnswers)
+    #lists loaded. Fill the lists.
+    l_ULAnswers.extend(PossibleAnswers)
+    l_URAnswers.extend(PossibleAnswers)
+    l_LLAnswers.extend(PossibleAnswers)
+    l_LRAnswers.extend(PossibleAnswers)
 
-b_FirstRun = True
-while (len(l_ULAnswers) > 1) or (len(l_URAnswers) > 1) or (len(l_LLAnswers) > 1) or (len(l_LRAnswers) > 1):
-    print("\n\n")
-    PrintWordsRemaining("Upper Left", l_ULAnswers)
-    PrintWordsRemaining("Upper Right", l_URAnswers)
-    PrintWordsRemaining("Lower Left", l_LLAnswers)
-    PrintWordsRemaining("Lower Right", l_LRAnswers)
-    if (len(l_ULAnswers)<=15) and (len(l_URAnswers)<=15) and (len(l_LLAnswers)<=15) and (len(l_LRAnswers)<=15):
-        if not b_SuperSearchConfirmed:
-            b_SuperSearch = bool(input("Do you want to enable SuperSearch now? "))
-            b_SuperSearchConfirmed = True
+    b_FirstRun = True
+    while (len(l_ULAnswers) > 1) or (len(l_URAnswers) > 1) or (len(l_LLAnswers) > 1) or (len(l_LRAnswers) > 1):
+        print("\n\n")
+        PrintWordsRemaining("Upper Left", l_ULAnswers)
+        PrintWordsRemaining("Upper Right", l_URAnswers)
+        PrintWordsRemaining("Lower Left", l_LLAnswers)
+        PrintWordsRemaining("Lower Right", l_LRAnswers)
+        if (len(l_ULAnswers)<=15) and (len(l_URAnswers)<=15) and (len(l_LLAnswers)<=15) and (len(l_LRAnswers)<=15):
+            if not b_SuperSearchConfirmed:
+                b_SuperSearch = bool(input("Do you want to enable SuperSearch now? "))
+                b_SuperSearchConfirmed = True
 
-    l_AllAnswers = []
-    if len(l_ULAnswers) > 1:
-        l_AllAnswers.extend(l_ULAnswers)
-    if len(l_URAnswers) > 1:
-        l_AllAnswers.extend(l_URAnswers)
-    if len(l_LLAnswers) > 1:
-        l_AllAnswers.extend(l_LLAnswers)
-    if len(l_LRAnswers) > 1:
-        l_AllAnswers.extend(l_LRAnswers) #put all the answers in one list
-    l_AllKnownLetters = []
-    l_AllKnownLetters.extend(l_ULUnknownPositions)
-    l_AllKnownLetters.extend(l_URUnknownPositions)
-    l_AllKnownLetters.extend(l_LLUnknownPositions)
-    l_AllKnownLetters.extend(l_LRUnknownPositions)
+        l_AllAnswers = []
+        if len(l_ULAnswers) > 1:
+            l_AllAnswers.extend(l_ULAnswers)
+        if len(l_URAnswers) > 1:
+            l_AllAnswers.extend(l_URAnswers)
+        if len(l_LLAnswers) > 1:
+            l_AllAnswers.extend(l_LLAnswers)
+        if len(l_LRAnswers) > 1:
+            l_AllAnswers.extend(l_LRAnswers) #put all the answers in one list
+        l_AllKnownLetters = []
+        l_AllKnownLetters.extend(l_ULUnknownPositions)
+        l_AllKnownLetters.extend(l_URUnknownPositions)
+        l_AllKnownLetters.extend(l_LLUnknownPositions)
+        l_AllKnownLetters.extend(l_LRUnknownPositions)
 
-    suggestWord(l_AllAnswers, wordLen+1, WholeWordList, l_AllKnownLetters, True)
+        suggestWord(l_AllAnswers, wordLen+1, WholeWordList, l_AllKnownLetters, True)
 
-    if b_SuperSearch & (not b_FirstRun):
-        OptimalWord = FindOptimalQuordlePlay()
-        #print("SuperSearch Suggestion: "+str(OptimalWord))
-    InterrogateUserForInfo_and_FilterWordlist()
-    b_FirstRun = False
-try:
-    print("\n\n")
-    PrintWordsRemaining("Upper Left", l_ULAnswers)
-    PrintWordsRemaining("Upper Right", l_URAnswers)
-    PrintWordsRemaining("Lower Left", l_LLAnswers)
-    PrintWordsRemaining("Lower Right", l_LRAnswers)
-    print("Done!")
-except IndexError:
-    print("Something went wrong. I can't find the solutions.")
+        if b_SuperSearch & (not b_FirstRun):
+            OptimalWord = FindOptimalQuordlePlay()
+            #print("SuperSearch Suggestion: "+str(OptimalWord))
+        InterrogateUserForInfo_and_FilterWordlist()
+        b_FirstRun = False
+    try:
+        print("\n\n")
+        PrintWordsRemaining("Upper Left", l_ULAnswers)
+        PrintWordsRemaining("Upper Right", l_URAnswers)
+        PrintWordsRemaining("Lower Left", l_LLAnswers)
+        PrintWordsRemaining("Lower Right", l_LRAnswers)
+        print("Done!")
+    except IndexError:
+        print("Something went wrong. I can't find the solutions.")
