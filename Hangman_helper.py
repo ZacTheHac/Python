@@ -51,7 +51,7 @@ def build_dictionary(wordLength,bannedCharacters):
     #load_dict("Wordlists/words_alpha.txt",legalWords)
 
     #load combined file that eliminated 7,506,911 duplicates (~7MB)
-    #load_dict("Wordlists/MEGADICT.txt",legalWords)
+    load_dict("Wordlists/MEGADICT.txt",legalWords)
 
     #print("Optimizing wordlist...")
     legalWords = optimize_wordlist(legalWords,wordLength,bannedCharacters)
@@ -507,6 +507,60 @@ def FindWordWithLetters(wantedLetters, wordList) -> None:
         print("The only/best word I can find is \""+wordList[maxHitWords[0]]+"\".")
     else:
         print("I couldn't find a word.") #it's possible the wordlist handed over contains none of the wanted letters
+
+def printLetters(l_WordList:list[str], i_MinCount:int = 1, i_MaxCount:int = None, l_LetterCounts:list[int] = None, l_2DLetterList:list = None) -> None:
+    """
+    i_MinCount = The Lowest number of hits that this function will return, inclusive. \n
+    i_MaxCount = the highest number of hits the letter can have to be returned, exclusive. Useful for ignoring letters that are in every word.\n
+    Provide one of the following:\n
+        l_WordList = the wordlist to operate on. \n
+        l_LetterCounts = a list of how common letters are, with the index of the list referring to their ASCII offset from 97(a)\n
+        l_2DLetterList = an array of 2 arrays that contains the character in [i][0], and its count in [i][1] \n
+    Set values to None if they're unused\n"""
+
+    l_CombinedList = [[0 for x in range(2)] for y in range(26)]
+
+    if l_2DLetterList is None:
+        #have to make the list myself
+        if l_LetterCounts is None:
+            #calculate with genstats and build
+            l_LetterCounts = [0] * 26
+            genStats(l_WordList,l_LetterCounts)
+        
+        for i in range(26):
+            l_CombinedList[i][0] = chr(i+97)
+            l_CombinedList[i][1] = l_LetterCounts[i]
+            #to access: [i][0] is the letter, [i][1] is the count
+    else:
+        l_CombinedList = l_2DLetterList
+
+    #sort the list via the counts, in reverse order because I like the largest values on the left
+    l_CombinedList = sorted(l_CombinedList, key=lambda x: x[1], reverse=True)
+
+    if i_MinCount is not None:
+        #make a list of values that are all nonzero
+        for i in range(len(l_CombinedList)-1,-1,-1): #iterate backwards so the index doesn't change on me
+            if l_CombinedList[i][1] < i_MinCount:
+                del l_CombinedList[i]
+            else:
+                break #once we hit a non-zero value, we know there's no more zeros as the list is sorted.
+    if i_MaxCount is not None:
+        for i in range(len(l_CombinedList)):
+            if l_CombinedList[0][1] >= i_MaxCount:
+                del l_CombinedList[0]
+            else:
+                break #all the top words are gonna be at the front of the list. if one is below that length, we know there are no more.
+    #at this point, all zero counts and max counts (assuming filterMaxCounts is set) are removed. The list is also sorted.
+
+    if len(l_CombinedList)>0:
+        i_width = len(str(l_CombinedList[0][1])) #the longest number is this many chars wide
+        str_Letters = "| "
+        str_Counts = "| "
+        for i in range(len(l_CombinedList)):
+            str_Counts += str(l_CombinedList[i][1]).center(i_width," ")+" | "
+            str_Letters += str(l_CombinedList[i][0]).center(i_width," ")+" | "
+        print(str_Letters)
+        print(str_Counts)
 
 
 

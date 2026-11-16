@@ -68,7 +68,7 @@ def build_dictionary(wordLength,bannedCharacters):
     #load_dict("Wordlists/wordle_answerlist.txt",legalWords)
 
     #load wordle complete list (both accepted words and answers)
-    #load_dict("Wordlists/wordle_complete.txt",legalWords)
+    load_dict("Wordlists/wordle_complete.txt",legalWords)
 
     #load expanded wordle answer list (NYT is adding words, and they're tricky ones)
     load_dict("Wordlists/wordle_answerlist_WordleTools.txt",legalWords)
@@ -80,7 +80,7 @@ def build_dictionary(wordLength,bannedCharacters):
     #load_dict("Wordlists/names.txt",legalWords)
 
     #load ILLEGAL words (This list contains all previous wordle answers)
-    load_dict("Wordlists/wordle_seen_answers.txt",illegalWords)
+    #load_dict("Wordlists/wordle_seen_answers.txt",illegalWords)
     illegalWords = optimize_wordlist(illegalWords,wordLength,bannedCharacters) #just doing this so that they're both processed the same.
 
     #print("Optimizing wordlist...")
@@ -231,7 +231,7 @@ def genStats(l_WordList, l_WordStats = None, l_LetterStats = None, noisy = False
             else:
                 print("The least common letter is: "+str(minLetters[0])+" in only "+str(minCount)+" words.")
 
-#TODO: this doesn't seem to work quite right with double letters being ruled out. For example, if "erect" is guessed and gets "yy...", then "sewer" is no valid, since we know there's only one E
+#TODO: this doesn't seem to work quite right with double letters being ruled out. For example, if "erect" is guessed and gets "yy...", then "sewer" is not valid, since we know there's only one E
 def InterrogateUserForInfo_and_FilterWordlist(hangmanRules,WordleMode) -> None:
     global bannedChars
     global unknownPositions
@@ -288,7 +288,7 @@ def InterrogateUserForInfo_and_FilterWordlist(hangmanRules,WordleMode) -> None:
                     if (s_WordAttempt[n] == l_GreyLetters[i]) and (s_WordOutcome[n] in ["y","g"]): #if the letter at n is the one we are counting AND it is marked as valid, increment the counter.
                         i_LetterOccurances+=1
                 #We know that l_GreyLetters[i] occurs i_LetterOccurances times in the word, and ONLY that number of times.
-                print("We knot that \""+str(l_GreyLetters[i])+"\" appears EXACTLY "+str(i_LetterOccurances)+" times.")
+                print("We know that \""+str(l_GreyLetters[i])+"\" appears EXACTLY "+str(i_LetterOccurances)+" times.")
                 l_KnownCounts.append([l_GreyLetters[i],i_LetterOccurances])
                 l_GreyLetters[i] = ""
             elif l_GreyLetters[i] in l_GreenLetters:
@@ -381,11 +381,11 @@ def InterrogateUserForInfo_and_FilterWordlist(hangmanRules,WordleMode) -> None:
             if char in unknownPositions:
                 if bool(input("Did you mean there are multiple \""+char+"\"s? ")):
                     unknownPositions.append(char)
-                    if bool(input("Are there EXACTLY "+unknownPositions.count(char)+" "+char+"s in the word?")):
+                    if bool(input("Are there EXACTLY "+str(unknownPositions.count(char))+" "+str(char)+"s in the word?")):
                         l_KnownCounts.append([char,unknownPositions.count(char)])
             else:
                 unknownPositions.append(char)
-                if bool(input("Are there EXACTLY "+unknownPositions.count(char)+" "+char+"s in the word?")):
+                if bool(input("Are there EXACTLY "+str(unknownPositions.count(char))+" "+str(char)+"'s in the word?")):
                         l_KnownCounts.append([char,unknownPositions.count(char)])
 
 
@@ -980,7 +980,7 @@ def FindWordWithLetters(wantedLetters, wordList) -> None:
     #find the remaining word with the most most-common letters and suggest that
     maxLettersHit = max(countLettersHit)
     maxHitWords = [i for i, j in enumerate(countLettersHit) if j == maxLettersHit] #this is a list of indexes in wordList where the max hit words reside
-    if maxLettersHit != len(wantedLetters) and len(maxHitWords) != 0: #if we didn't find all the letters, but we have at least one result
+    if maxLettersHit != len(set(wantedLetters)) and len(maxHitWords) != 0: #if we didn't find all the letters, but we have at least one result
         print("I was unable to find any words containing all of the letters. The top results are shown instead.")
     if len(maxHitWords) > 1:
         print("Words containing "+str(wantedLetters)+":")
@@ -1032,7 +1032,37 @@ if (not b_KnowAllPositions) and (not b_WordleMode):
         Letters = []
         for char in findLetters:
             Letters.append(char)
-        FindWordWithLetters(Letters,WholeWordList)
+        if len(set(Letters)) != len(Letters): #there's duplicates
+            b_dupesmatter = bool(input("There seems to be duplicate letters in there. Do the letter counts matter to you? "))
+            if b_dupesmatter:
+                b_minOrTotal = bool(input("Should the duplicates be treated as a MINIMUM number of hits? Otherwise it's the exact number of hits. "))
+                if b_minOrTotal:
+                    #The user cares about duplicates and wants them to be the minimum counts
+                    print(reduce_Wordlist(l_WordList=WholeWordList,l_WantedLetters=Letters))
+                else:
+                    #the user cares about dupes and they should be the EXACT number of counts
+                    b_AllCountsMatter = bool(input("Should ALL letters be exact counts? Otherwise it's only the duplicates."))
+                    if b_AllCountsMatter:
+                        #count all the letters
+                        l_LetterCounts = []
+                        for lett in set(Letters):
+                            i_count = Letters.count(lett)
+                            l_LetterCounts.append([lett,i_count])
+                        print(reduce_Wordlist(l_WordList=WholeWordList,l_WantedLetters=Letters,l_KnownCounts=l_LetterCounts))
+                    else:
+                        #count the dupes to make a l_KnownCounts
+                        l_DupeLetterCounts = []
+                        for lett in set(Letters):
+                            i_count = Letters.count(lett)
+                            if i_count != 1:
+                                l_DupeLetterCounts.append([lett,i_count])
+                        print(reduce_Wordlist(l_WordList=WholeWordList,l_WantedLetters=Letters,l_KnownCounts=l_DupeLetterCounts))
+            else:
+                #user doesn't care about dupes.
+                FindWordWithLetters(Letters,WholeWordList)
+        else:
+            #there's no dupes in the input
+            FindWordWithLetters(Letters,WholeWordList)
         quit() #why I can't just return when not in a function is beyond me...
 b_FirstRun = True
 while len(legalWords) > 1:
@@ -1066,3 +1096,5 @@ try:
     print("Your word is: "+legalWords[0])
 except IndexError:
     print("Something went wrong. I don't know a word that fits.")
+
+#TODO: why isn't "union" being found with [fuy][untie][tir][oer][nds]? And why isn't "union" considered as a word containing all of U,N,I,O,N, but then it's still in the result list?
