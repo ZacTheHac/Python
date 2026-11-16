@@ -455,60 +455,60 @@ def perform_rollback(api_url: str, api_key: str | None, rollback_path: str, cust
 	print(f"Rollback log saved to : {rollback_log_filename}")
 
 def prepare_hydrus_api_regex(pattern: str) -> tuple[str, list[str]]:
-    """
-    Rewrites case-sensitive Python regex tokens into lowercase-safe equivalents for Hydrus's
-    Client API search endpoint (workaround for https://github.com/hydrusnetwork/hydrus/issues/2122).
-    Returns (api_safe_pattern, list_of_warnings).
-    The original pattern is still used locally in Python for exact matching and substitution.
-    """
-    warnings = []
-    safe = pattern
+	"""
+	Rewrites case-sensitive Python regex tokens into lowercase-safe equivalents for Hydrus's
+	Client API search endpoint (workaround for https://github.com/hydrusnetwork/hydrus/issues/2122).
+	Returns (api_safe_pattern, list_of_warnings).
+	The original pattern is still used locally in Python for exact matching and substitution.
+	"""
+	warnings = []
+	safe = pattern
 
-    # 1. Named capture groups: (?P<name>...) -> (?:...)
-    if re.search(r"\(\?P<[^>]+>", safe):
-        warnings.append("Named capture group '(?P<name>...)' -> converted to '(?:...)' for API search")
-        safe = re.sub(r"\(\?P<[^>]+>", "(?:", safe)
+	# 1. Named capture groups: (?P<name>...) -> (?:...)
+	if re.search(r"\(\?P<[^>]+>", safe):
+		warnings.append("Named capture group '(?P<name>...)' -> converted to '(?:...)' for API search")
+		safe = re.sub(r"\(\?P<[^>]+>", "(?:", safe)
 
-    # 2. Named backreferences: (?P=name) -> .* (broadened for API search; exact match enforced locally)
-    if re.search(r"\(\?P=[^)]+\)", safe):
-        warnings.append("Named backreference '(?P=name)' -> broadened to '.*' for API search (exact match enforced locally)")
-        safe = re.sub(r"\(\?P=[^)]+\)", ".*", safe)
+	# 2. Named backreferences: (?P=name) -> .* (broadened for API search; exact match enforced locally)
+	if re.search(r"\(\?P=[^)]+\)", safe):
+		warnings.append("Named backreference '(?P=name)' -> broadened to '.*' for API search (exact match enforced locally)")
+		safe = re.sub(r"\(\?P=[^)]+\)", ".*", safe)
 
-    # 3. Non-digit \D -> [^0-9] (prevents lowercasing to \d)
-    if re.search(r"(?<!\\)(?:\\\\)*\\D", safe):
-        warnings.append("Non-digit escape '\\D' -> converted to '[^0-9]' for API search")
-        safe = re.sub(r"((?<!\\)(?:\\\\)*)\\D", r"\1[^0-9]", safe)
+	# 3. Non-digit \D -> [^0-9] (prevents lowercasing to \d)
+	if re.search(r"(?<!\\)(?:\\\\)*\\D", safe):
+		warnings.append("Non-digit escape '\\D' -> converted to '[^0-9]' for API search")
+		safe = re.sub(r"((?<!\\)(?:\\\\)*)\\D", r"\1[^0-9]", safe)
 
-    # 4. Non-whitespace \S -> [^\s] (prevents lowercasing to \s)
-    if re.search(r"(?<!\\)(?:\\\\)*\\S", safe):
-        warnings.append("Non-whitespace escape '\\S' -> converted to '[^\\s]' for API search")
-        safe = re.sub(r"((?<!\\)(?:\\\\)*)\\S", r"\1[^\\s]", safe)
+	# 4. Non-whitespace \S -> [^\s] (prevents lowercasing to \s)
+	if re.search(r"(?<!\\)(?:\\\\)*\\S", safe):
+		warnings.append("Non-whitespace escape '\\S' -> converted to '[^\\s]' for API search")
+		safe = re.sub(r"((?<!\\)(?:\\\\)*)\\S", r"\1[^\\s]", safe)
 
-    # 5. Non-word \W -> [^a-z0-9_] (prevents lowercasing to \w)
-    if re.search(r"(?<!\\)(?:\\\\)*\\W", safe):
-        warnings.append("Non-word escape '\\W' -> converted to '[^a-z0-9_]' for API search")
-        safe = re.sub(r"((?<!\\)(?:\\\\)*)\\W", r"\1[^a-z0-9_]", safe)
+	# 5. Non-word \W -> [^a-z0-9_] (prevents lowercasing to \w)
+	if re.search(r"(?<!\\)(?:\\\\)*\\W", safe):
+		warnings.append("Non-word escape '\\W' -> converted to '[^a-z0-9_]' for API search")
+		safe = re.sub(r"((?<!\\)(?:\\\\)*)\\W", r"\1[^a-z0-9_]", safe)
 
-    # 6. Start-of-string \A -> ^ (prevents lowercasing to \a ASCII bell)
-    if re.search(r"(?<!\\)(?:\\\\)*\\A", safe):
-        warnings.append("Start anchor '\\A' -> converted to '^' for API search")
-        safe = re.sub(r"((?<!\\)(?:\\\\)*)\\A", r"\1^", safe)
+	# 6. Start-of-string \A -> ^ (prevents lowercasing to \a ASCII bell)
+	if re.search(r"(?<!\\)(?:\\\\)*\\A", safe):
+		warnings.append("Start anchor '\\A' -> converted to '^' for API search")
+		safe = re.sub(r"((?<!\\)(?:\\\\)*)\\A", r"\1^", safe)
 
-    # 7. End-of-string \Z -> $ (prevents lowercasing to invalid escape \z)
-    if re.search(r"(?<!\\)(?:\\\\)*\\Z", safe):
-        warnings.append("End anchor '\\Z' -> converted to '$' for API search")
-        safe = re.sub(r"((?<!\\)(?:\\\\)*)\\Z", r"\1$", safe)
+	# 7. End-of-string \Z -> $ (prevents lowercasing to invalid escape \z)
+	if re.search(r"(?<!\\)(?:\\\\)*\\Z", safe):
+		warnings.append("End anchor '\\Z' -> converted to '$' for API search")
+		safe = re.sub(r"((?<!\\)(?:\\\\)*)\\Z", r"\1$", safe)
 
-    # 8. Non-word-boundary \B -> removed/broadened (prevents lowercasing to \b word boundary)
-    if re.search(r"(?<!\\)(?:\\\\)*\\B", safe):
-        warnings.append("Non-word-boundary '\\B' -> stripped for API search to avoid matching '\\b' (exact match enforced locally)")
-        safe = re.sub(r"((?<!\\)(?:\\\\)*)\\B", r"\1", safe)
+	# 8. Non-word-boundary \B -> removed/broadened (prevents lowercasing to \b word boundary)
+	if re.search(r"(?<!\\)(?:\\\\)*\\B", safe):
+		warnings.append("Non-word-boundary '\\B' -> stripped for API search to avoid matching '\\b' (exact match enforced locally)")
+		safe = re.sub(r"((?<!\\)(?:\\\\)*)\\B", r"\1", safe)
 
-    # 9. Remaining uppercase ASCII letters (e.g., [A-Z] or literal uppercase URL paths)
-    if re.search(r"[A-Z]", safe):
-        warnings.append("Uppercase characters/ranges (e.g. A-Z) -> Hydrus API lowercases search strings (exact case enforced locally)")
+	# 9. Remaining uppercase ASCII letters (e.g., [A-Z] or literal uppercase URL paths)
+	if re.search(r"[A-Z]", safe):
+		warnings.append("Uppercase characters/ranges (e.g. A-Z) -> Hydrus API lowercases search strings (exact case enforced locally)")
 
-    return safe, warnings
+	return safe, warnings
 
 
 
@@ -553,8 +553,15 @@ def main():
 
 	# 2. Search for matching files
 	if use_regex:
-		print(f"Searching for files with known URLs matching regex '{old_domain}'...")
-		predicate = f"system:has url matching regex {old_domain}"
+		hydrus_safe_regex, regex_warnings = prepare_hydrus_api_regex(old_domain)
+		if regex_warnings:
+			print("WARNING: Hydrus Client API lowercases regex search strings (see https://github.com/hydrusnetwork/hydrus/issues/2122).")
+			print("Applying automatic workarounds for the API search query (your exact original regex will still be used locally):")
+			for w in regex_warnings:
+				print(f"  - {w}")
+			print()
+		print(f"Searching for files with known URLs matching regex '{hydrus_safe_regex}'...")
+		predicate = f"system:has url matching regex {hydrus_safe_regex}"
 	else:
 		print(f"Searching for files with known URLs on domain '{old_domain}'...")
 		predicate = f"system:has domain {old_domain}"
