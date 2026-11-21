@@ -11,13 +11,48 @@ import requests #needs to be installed - pip install requests
 """
 python hydrus_migrate_urls.py \
   --api-key "YOUR_64_CHAR_KEY" \
-  --old-domain "https://oldsite.com" \
+  --old-domain "oldsite.com" \
   --new-domain "newsite.org" \
   --mode add \
   --dry-run
 """
 #practical example: --regex --old-domain "(?P<baddomain>^https?://*DOMAIN*\.net/(posts/)?-)(?P<https>https?:/)(/)?(?P<origurl>.*$)" --new-domain "\g<https>/\g<origurl>"
-	#this will try to find all the URLs that were originally mis-parsed as "http:/domain.net", leading to the saved URL instead being "http://Sourcedomain.net/https:/domain.net"
+	#this will try to find all the URLs that were originally mis-parsed from "http:/domain.net", leading to the saved URL being "http://Sourcedomain.net/https:/domain.net"
+#or: --regex --old-domain "^https?://*OLD*\.com" --new-domain "https://new.com"
+	#will only match the URLs that are specifically on *OLD*.com, no subdomains, but doesn't care about https or http, and then converts them to new.com URLs. Done without regex, subdomains are matched, too.
+
+def post_url_association(api_url: str, headers: dict, file_hash: str, urls_to_add: list, urls_to_delete: list):
+	"""Sends a URL add/delete association payload for a single file hash to Hydrus."""
+	payload = {
+		"hash": file_hash,
+		"urls_to_add": urls_to_add,
+		"urls_to_delete": urls_to_delete,
+	}
+	post_res = requests.post(
+		f"{api_url}/add_urls/associate_url",
+		headers=headers,
+		json=payload,
+	)
+	if not post_res.ok:
+		raise requests.HTTPError(f"{post_res.status_code}: {post_res.text}")
+
+
+def write_json_log(log_filename: str, data: dict):
+	"""Writes a dictionary to a formatted UTF-8 JSON log file."""
+	with open(log_filename, "w", encoding="utf-8") as f:
+		json.dump(data, f, indent=2)
+
+
+def url_matches(url: str, old_pattern: str, use_regex: bool, compiled_regex: re.Pattern | None = None) -> bool:
+	"""Returns True if url matches either the compiled regex or the target domain (including subdomains)."""
+	if use_regex and compiled_regex is not None:
+		return compiled_regex.search(url) is not None
+	try:
+		netloc_lower = urlparse(url).netloc.lower()
+		return bool(old_pattern) and (netloc_lower == old_pattern or netloc_lower.endswith("." + old_pattern))
+	except Exception:
+		return False
+
 
 def looks_like_regex(pattern: str) -> str:
 	"""
@@ -121,11 +156,10 @@ def parse_args():
 		action="store_true",
 		help="Force standard domain replacement even if the input looks like a regular expression",
 	)
-
 	parser.add_argument(
 		"--mode",
-		choices=["add", "replace"],
-		help="Whether to ADD the new URL alongside the old one, or REPLACE (delete) the old URL",
+		choices=["add", "replace", "delete"],
+		help="ADD a new URL alongside the old one, REPLACE (add new + delete old), or DELETE matching old URLs only",
 	)
 	parser.add_argument(
 		"--dry-run",
@@ -155,8 +189,18 @@ def get_interactive_inputs(args):
 	"""Prompts the user for any options not passed via CLI flags."""
 	api_key = args.api_key
 	while not api_key:
-		print("An API key can get gotten in Hydrus under 'services -> review services -> local -> client api'")
+		print("An API key can be gotten in Hydrus under 'services -> review services -> local -> client api'")
 		api_key = input("Enter your Hydrus Client API Access Key: ").strip()
+
+	mode = args.mode
+	while mode not in ("add", "replace", "delete"):
+		choice = input("Mode - [A]DD new URLs alongside old ones, [R]EPLACE (add new & delete old), or [D]ELETE matching old URLs only? (a/r/d): ").strip().lower()
+		if choice in ("a", "add"):
+			mode = "add"
+		elif choice in ("r", "rep", "replace"):
+			mode = "replace"
+		elif choice in ("d", "del", "delete", "remove"):
+			mode = "delete"
 
 	raw_old = args.old_domain.strip() if args.old_domain else ""
 	while not raw_old:
@@ -180,36 +224,33 @@ def get_interactive_inputs(args):
 
 	if use_regex:
 		old_pattern = raw_old
-		new_pattern = args.new_domain.strip() if args.new_domain else ""
-		while not new_pattern:
-			new_pattern = input("Enter the NEW regex substitution string (e.g., https://newdomain.com\\1): ").strip()
+		if mode == "delete":
+			new_pattern = ""
+		else:
+			new_pattern = args.new_domain.strip() if args.new_domain else ""
+			while not new_pattern:
+				new_pattern = input("Enter the NEW regex substitution string (e.g., https://newdomain.com\\1): ").strip()
 	else:
 		old_pattern = sanitize_domain(raw_old)
 		while not old_pattern:
 			raw_old = input("Invalid domain. Enter the OLD domain (e.g., olddomain.com): ").strip()
 			old_pattern = sanitize_domain(raw_old)
 
-		new_pattern = sanitize_domain(args.new_domain) if args.new_domain else ""
-		while not new_pattern:
-			raw_new = input("Enter the NEW domain (e.g., newdomain.com or https://newdomain.com): ").strip()
-			new_pattern = sanitize_domain(raw_new)
-
-	mode = args.mode
-	while mode not in ("add", "replace"):
-		choice = input("Mode - [A]DD new URLs alongside old ones, or [R]EPLACE (delete) old URLs? (a/r): ").strip().lower()
-		if choice in ("a", "add"):
-			mode = "add"
-		elif choice in ("r", "rep", "replace", "del", "delete"):
-			mode = "replace"
+		if mode == "delete":
+			new_pattern = ""
+		else:
+			new_pattern = sanitize_domain(args.new_domain) if args.new_domain else ""
+			while not new_pattern:
+				raw_new = input("Enter the NEW domain (e.g., newdomain.com or https://newdomain.com): ").strip()
+				new_pattern = sanitize_domain(raw_new)
 
 	dry_run = args.dry_run
 	# If mode/domains were entered interactively and --dry-run wasn't explicitly passed on CLI, ask about dry run
-	if not args.dry_run and not (args.old_domain and args.new_domain and args.mode):
+	if not args.dry_run and not (args.old_domain and (mode == "delete" or args.new_domain) and args.mode):
 		dr_choice = input("Perform a DRY RUN first? (no changes will be sent to Hydrus) [Y/N]: ").strip().lower()
 		dry_run = dr_choice in ("", "y", "yes", "dry", "dryrun")
 
 	return api_key, old_pattern, new_pattern, mode, dry_run, use_regex
-
 
 
 def swap_url_domain(url: str, old_domain: str, new_domain: str) -> str | None:
@@ -265,20 +306,8 @@ def execute_live_changes(api_url: str, headers: dict, planned_files: list, old_d
 		if "replaced_pairs" in entry:
 			live_entry["replaced_pairs"] = entry["replaced_pairs"]
 
-		payload = {
-			"hash": file_hash,
-			"urls_to_add": urls_to_add,
-			"urls_to_delete": urls_to_delete,
-		}
-
 		try:
-			post_res = requests.post(
-				f"{api_url}/add_urls/associate_url",
-				headers=headers,
-				json=payload,
-			)
-			if not post_res.ok:
-				raise requests.HTTPError(f"{post_res.status_code}: {post_res.text}")
+			post_url_association(api_url, headers, file_hash, urls_to_add, urls_to_delete)
 		except requests.RequestException as e:
 			live_entry["action"] = "error"
 			live_entry["error"] = str(e)
@@ -292,8 +321,7 @@ def execute_live_changes(api_url: str, headers: dict, planned_files: list, old_d
 			live_log_data["summary"]["total_urls_removed"] += len(urls_to_delete)
 			print(f"[UPDATED] {file_hash} | +{len(urls_to_add)} added, -{len(urls_to_delete)} removed")
 
-	with open(log_filename, "w", encoding="utf-8") as f:
-		json.dump(live_log_data, f, indent=2)
+	write_json_log(log_filename, live_log_data)
 
 	print("\n--- Live Run Summary ---")
 	print(f"Files modified        : {live_log_data['summary']['files_modified']}")
@@ -416,20 +444,8 @@ def perform_rollback(api_url: str, api_key: str | None, rollback_path: str, cust
 			"urls_removed": urls_to_delete,
 		}
 
-		payload = {
-			"hash": file_hash,
-			"urls_to_add": urls_to_add,
-			"urls_to_delete": urls_to_delete,
-		}
-
 		try:
-			post_res = requests.post(
-				f"{api_url}/add_urls/associate_url",
-				headers=headers,
-				json=payload,
-			)
-			if not post_res.ok:
-				raise requests.HTTPError(f"{post_res.status_code}: {post_res.text}")
+			post_url_association(api_url, headers, file_hash, urls_to_add, urls_to_delete)
 		except requests.RequestException as e:
 			rb_entry["action"] = "error"
 			rb_entry["error"] = str(e)
@@ -443,8 +459,7 @@ def perform_rollback(api_url: str, api_key: str | None, rollback_path: str, cust
 			rollback_log_data["summary"]["total_urls_removed"] += len(urls_to_delete)
 			print(f"[REVERTED] {file_hash} | +{len(urls_to_add)} restored, -{len(urls_to_delete)} removed")
 
-	with open(rollback_log_filename, "w", encoding="utf-8") as f:
-		json.dump(rollback_log_data, f, indent=2)
+	write_json_log(rollback_log_filename, rollback_log_data)
 
 	print("\n--- Rollback Summary ---")
 	print(f"Files reverted        : {rollback_log_data['summary']['files_reverted']}")
@@ -519,7 +534,7 @@ def main():
 	if args.rollback:
 		perform_rollback(args.api_url, args.api_key, args.rollback, args.log_file)
 		return
-	
+
 	api_key, old_domain, new_domain, mode, dry_run, use_regex = get_interactive_inputs(args)
 
 	compiled_regex = None
@@ -540,7 +555,7 @@ def main():
 	print(f"API URL    : {args.api_url}")
 	print(f"Match Type : {'REGEX' if use_regex else 'DOMAIN'}")
 	print(f"Old Domain : {old_domain}")
-	print(f"New Domain : {new_domain}")
+	print(f"New Domain : {new_domain if mode != 'delete' else 'N/A (delete mode)'}")
 	print(f"Mode       : {mode.upper()}")
 	print(f"Dry Run    : {'YES (No changes will be made)' if dry_run else 'NO (Live execution)'}")
 	print(f"Log File   : {log_filename}")
@@ -580,7 +595,7 @@ def main():
 		"dry_run": dry_run,
 		"use_regex": use_regex,
 		"old_domain": old_domain,
-		"new_domain": new_domain,
+		"new_domain": new_domain if mode != "delete" else None,
 		"mode": mode,
 		"summary": {
 			"candidate_files_found": len(file_ids),
@@ -612,15 +627,19 @@ def main():
 			replacements_detail = []
 
 			for url in known_urls:
-				new_url = transform_url(url, old_domain, new_domain, use_regex, compiled_regex)
-				if new_url and new_url != url:
-					# Only queue addition if it isn't already on the file
-					if new_url not in known_urls and new_url not in urls_to_add:
-						urls_to_add.append(new_url)
-
-					if mode == "replace":
+				if mode == "delete":
+					if url_matches(url, old_domain, use_regex, compiled_regex) and url not in urls_to_delete:
 						urls_to_delete.append(url)
-						replacements_detail.append({"old_url": url, "new_url": new_url})
+				else:
+					new_url = transform_url(url, old_domain, new_domain, use_regex, compiled_regex)
+					if new_url and new_url != url:
+						# Only queue addition if it isn't already on the file
+						if new_url not in known_urls and new_url not in urls_to_add:
+							urls_to_add.append(new_url)
+
+						if mode == "replace":
+							urls_to_delete.append(url)
+							replacements_detail.append({"old_url": url, "new_url": new_url})
 
 			if not urls_to_add and not urls_to_delete:
 				continue
@@ -635,18 +654,8 @@ def main():
 				file_entry["replaced_pairs"] = replacements_detail
 
 			if not dry_run:
-				payload = {
-					"hash": file_hash,
-					"urls_to_add": urls_to_add,
-					"urls_to_delete": urls_to_delete,
-				}
 				try:
-					post_res = requests.post(
-						f"{args.api_url}/add_urls/associate_url",
-						headers=headers,
-						json=payload,
-					)
-					post_res.raise_for_status()
+					post_url_association(args.api_url, headers, file_hash, urls_to_add, urls_to_delete)
 				except requests.RequestException as e:
 					file_entry["action"] = "error"
 					file_entry["error"] = str(e)
@@ -672,13 +681,15 @@ def main():
 		avg_removed = log_data["summary"]["total_urls_removed"] / modified_count
 		rounded_removed = round_half_up(avg_removed)
 
+		track_removed = mode in ("replace", "delete")
+
 		outliers = []
 		for entry in log_data["files"]:
 			added_cnt = len(entry["urls_added"])
 			removed_cnt = len(entry["urls_removed"])
 
 			diff_added = added_cnt != rounded_added
-			diff_removed = (mode == "replace") and (removed_cnt != rounded_removed)
+			diff_removed = track_removed and (removed_cnt != rounded_removed)
 
 			if diff_added or diff_removed:
 				outliers.append({
@@ -692,15 +703,14 @@ def main():
 		log_data["dry_run_analysis"] = {
 			"average_urls_added_per_file": avg_added,
 			"rounded_average_urls_added": rounded_added,
-			"average_urls_removed_per_file": avg_removed if mode == "replace" else 0,
-			"rounded_average_urls_removed": rounded_removed if mode == "replace" else 0,
+			"average_urls_removed_per_file": avg_removed if track_removed else 0,
+			"rounded_average_urls_removed": rounded_removed if track_removed else 0,
 			"outlier_files_count": len(outliers),
 			"outlier_files": outliers,
 		}
 
 	# 5. Write output log
-	with open(log_filename, "w", encoding="utf-8") as f:
-		json.dump(log_data, f, indent=2)
+	write_json_log(log_filename, log_data)
 
 	print("\n--- Summary ---")
 	print(f"Files {'that would be ' if dry_run else ''}modified : {modified_count}")
@@ -713,14 +723,14 @@ def main():
 		analysis = log_data["dry_run_analysis"]
 		print("\n--- Dry Run Anomaly Check ---")
 		print(f"Avg URLs added/file   : {analysis['average_urls_added_per_file']:.5f} (expected whole number: {analysis['rounded_average_urls_added']})")
-		if mode == "replace":
+		if track_removed:
 			print(f"Avg URLs removed/file : {analysis['average_urls_removed_per_file']:.5f} (expected whole number: {analysis['rounded_average_urls_removed']})")
 
 		outliers = analysis["outlier_files"]
 		if outliers:
 			print(f"\nFiles differing from the rounded average ({len(outliers)} found):")
 			for item in outliers:
-				if mode == "replace":
+				if track_removed:
 					print(f"\n  - {item['hash']} (+{item['urls_added_count']} added, -{item['urls_removed_count']} removed)")
 				else:
 					print(f"\n  - {item['hash']} (+{item['urls_added_count']} added)")
